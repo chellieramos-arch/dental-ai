@@ -1,0 +1,14 @@
+.env
+chroma_db/
+chat_cache.json
+__pycache__/
+*.pyc
+
+# PDFs and source documents — too large for git.
+# Keep a separate backup (Google Drive, Dropbox, etc.)
+documents/
+*.pdf
+*.pptx
+
+# macOS
+.DS_Store
