@@ -1692,8 +1692,8 @@ section[data-testid="stSidebar"] .sess-del-wrap .stButton > button:hover {
    LANGUAGE TOGGLE
 ══════════════════════════════════════ */
 
-/* Session list buttons — override the gold pill BEFORE the global rule */
-section[data-testid="stSidebar"] .sess-btn-wrap button {
+/* Session list buttons — two-class selector beats global one-class rule */
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button {
     background: transparent !important;
     border: none !important;
     border-radius: 4px !important;
@@ -1712,15 +1712,15 @@ section[data-testid="stSidebar"] .sess-btn-wrap button {
     min-height: unset !important;
     height: auto !important;
 }
-section[data-testid="stSidebar"] .sess-btn-wrap button:hover {
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button:hover {
     background: rgba(255,255,255,0.08) !important;
     border: none !important;
     color: #ffffff !important;
     transform: none !important;
     box-shadow: none !important;
 }
-section[data-testid="stSidebar"] .sess-btn-wrap button p,
-section[data-testid="stSidebar"] .sess-btn-wrap button span {
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button p,
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button span {
     color: rgba(255,255,255,0.80) !important;
     font-weight: 400 !important;
 }
