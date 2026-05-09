@@ -1,13 +1,22 @@
 import os
 import json
 import base64
-import anthropic
 from datetime import datetime
 from dotenv import load_dotenv
-from llama_index.core import VectorStoreIndex
-from llama_index.core import StorageContext
 import streamlit as st
 import streamlit.components.v1 as components
+
+# ─── Copy Streamlit secrets → os.environ (needed for config.py on Cloud) ─────
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:
+    pass  # running locally without secrets.toml is fine
+
+import anthropic
+from llama_index.core import VectorStoreIndex
+from llama_index.core import StorageContext
 
 # ─── Config (controls local vs cloud mode) ───────────────────────────────────
 from config import IS_LOCAL, IS_CLOUD, CHROMA_PATH, CHROMA_COLLECTION
@@ -16,6 +25,11 @@ from config import IS_LOCAL, IS_CLOUD, CHROMA_PATH, CHROMA_COLLECTION
 if IS_LOCAL:
     import chromadb
     from llama_index.vector_stores.chroma import ChromaVectorStore
+
+# Cloud-only imports
+if IS_CLOUD:
+    from pinecone import Pinecone as PineconeClient
+    from supabase import create_client as create_supabase_client
 
 try:
     import fitz  # PyMuPDF
@@ -27,13 +41,26 @@ except ImportError:
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
-# ─── Multi-Session Cache ──────────────────────────────────────────────────────────
-# Single JSON file — all sessions live here. user_ctx is NOT saved (too large).
-# Structure: { "sessions": [ { "id", "title", "created_at", "exchanges": [...] } ] }
+# ─── Session Cache (local = JSON file, cloud = Supabase) ─────────────────────
+# user_ctx is never saved (too large — contains full PDF excerpts).
 
-CACHE_FILE  = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_cache.json")
-MAX_SESSIONS = 50   # keep the 50 most recent sessions
+CACHE_FILE   = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chat_cache.json")
+MAX_SESSIONS = 50
 
+def _get_supabase():
+    """Return a cached Supabase client (cloud mode only)."""
+    if "supabase_client" not in st.session_state:
+        from config import SUPABASE_URL, SUPABASE_KEY
+        st.session_state.supabase_client = create_supabase_client(SUPABASE_URL, SUPABASE_KEY)
+    return st.session_state.supabase_client
+
+def _current_user_email() -> str:
+    """Return the logged-in user's email (cloud) or 'local' (local mode)."""
+    if IS_CLOUD:
+        return st.session_state.get("user_email", "unknown@nsu.edu")
+    return "local"
+
+# ── Local helpers (JSON file) ─────────────────────────────────────────────────
 def _read_all_sessions() -> list:
     if not os.path.exists(CACHE_FILE):
         return []
@@ -45,18 +72,15 @@ def _read_all_sessions() -> list:
 
 def _write_all_sessions(sessions: list) -> None:
     try:
-        # Trim to MAX_SESSIONS (newest first in list)
         sessions = sessions[-MAX_SESSIONS:]
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump({"sessions": sessions}, f, ensure_ascii=False, indent=2)
     except Exception:
         pass
 
-def save_session(session_id: str, history: list) -> None:
-    """Upsert the current session into the cache file. Skips user_ctx to save space."""
-    sessions = _read_all_sessions()
-    # Build compact exchanges (no user_ctx — that has full PDF excerpts)
-    exchanges = [
+# ── Public session API (works for both modes) ─────────────────────────────────
+def _build_exchanges(history: list) -> list:
+    return [
         {
             "user":      ex["user"],
             "assistant": ex["assistant"],
@@ -65,8 +89,27 @@ def save_session(session_id: str, history: list) -> None:
         }
         for ex in history
     ]
+
+def save_session(session_id: str, history: list) -> None:
+    """Upsert the current session. Skips user_ctx to save space."""
+    exchanges = _build_exchanges(history)
     title = history[0]["user"][:60] if history else "Untitled"
-    # Find existing session or create new entry
+
+    if IS_CLOUD:
+        try:
+            sb = _get_supabase()
+            sb.table("chat_sessions").upsert({
+                "id":         session_id,
+                "user_email": _current_user_email(),
+                "title":      title,
+                "exchanges":  exchanges,
+            }).execute()
+        except Exception:
+            pass
+        return
+
+    # Local: JSON file
+    sessions = _read_all_sessions()
     for s in sessions:
         if s["id"] == session_id:
             s["exchanges"] = exchanges
@@ -82,23 +125,133 @@ def save_session(session_id: str, history: list) -> None:
     _write_all_sessions(sessions)
 
 def load_session(session_id: str) -> list:
-    """Return the exchange list for a specific session (without user_ctx)."""
+    """Return the exchange list for a session."""
+    if IS_CLOUD:
+        try:
+            sb = _get_supabase()
+            result = sb.table("chat_sessions").select("exchanges").eq("id", session_id).execute()
+            if result.data:
+                return result.data[0]["exchanges"]
+        except Exception:
+            pass
+        return []
+
     for s in _read_all_sessions():
         if s["id"] == session_id:
             return s["exchanges"]
     return []
 
 def delete_session(session_id: str) -> None:
+    if IS_CLOUD:
+        try:
+            _get_supabase().table("chat_sessions").delete().eq("id", session_id).execute()
+        except Exception:
+            pass
+        return
     sessions = [s for s in _read_all_sessions() if s["id"] != session_id]
     _write_all_sessions(sessions)
+
+def list_all_sessions() -> list:
+    """Return all sessions for the current user."""
+    if IS_CLOUD:
+        try:
+            sb = _get_supabase()
+            result = (
+                sb.table("chat_sessions")
+                  .select("id, title, created_at")
+                  .eq("user_email", _current_user_email())
+                  .order("created_at", desc=True)
+                  .limit(MAX_SESSIONS)
+                  .execute()
+            )
+            return result.data or []
+        except Exception:
+            return []
+    return _read_all_sessions()
 
 def new_session_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
+# ─── Supabase Email OTP Login Gate (cloud mode only) ─────────────────────────
+# Students enter their NSU email → receive a 6-digit code → enter it → done.
+# No Azure, no passwords, no IT department required.
+
+_NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
+
+def _is_nsu_email(email: str) -> bool:
+    return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
+
+if IS_CLOUD and "user_email" not in st.session_state:
+    st.set_page_config(page_title="DentAI – NSU Login", page_icon="🦷", layout="centered")
+    st.markdown("""
+        <div style="text-align:center; padding:3rem 0 1.5rem;">
+            <h1 style="font-size:2.5rem; margin-bottom:0.25rem;">🦷 Dent<span style="color:#2563eb;">AI</span></h1>
+            <p style="color:#6b7280; font-size:1.05rem;">
+                NSU College of Dental Medicine · Clinical Study Assistant
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        sb = _get_supabase()
+
+        # ── Step 1: collect email and send OTP ───────────────────────────────
+        if "otp_sent_to" not in st.session_state:
+            email_input = st.text_input(
+                "NSU Email Address",
+                placeholder="yourname@mynsu.nova.edu",
+                label_visibility="collapsed",
+            )
+            if st.button("Send Login Code", use_container_width=True, type="primary"):
+                email_input = email_input.strip().lower()
+                if not email_input:
+                    st.error("Please enter your NSU email address.")
+                elif not _is_nsu_email(email_input):
+                    st.error("Please use your NSU email address (@mynsu.nova.edu or @nova.edu).")
+                else:
+                    try:
+                        sb.auth.sign_in_with_otp({"email": email_input})
+                        st.session_state.otp_sent_to = email_input
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Could not send code. Please try again. ({e})")
+
+        # ── Step 2: verify OTP code ───────────────────────────────────────────
+        else:
+            sent_to = st.session_state.otp_sent_to
+            st.info(f"A 6-digit code was sent to **{sent_to}**. Check your Outlook inbox.")
+            code_input = st.text_input(
+                "Enter your 6-digit code",
+                max_chars=6,
+                placeholder="123456",
+                label_visibility="collapsed",
+            )
+            col_a, col_b = st.columns(2)
+            with col_a:
+                if st.button("Verify Code", use_container_width=True, type="primary"):
+                    try:
+                        resp = sb.auth.verify_otp({
+                            "email": sent_to,
+                            "token": code_input.strip(),
+                            "type":  "email",
+                        })
+                        st.session_state.user_email = resp.user.email
+                        del st.session_state.otp_sent_to
+                        st.rerun()
+                    except Exception:
+                        st.error("Invalid or expired code. Please try again.")
+            with col_b:
+                if st.button("Use a different email", use_container_width=True):
+                    del st.session_state.otp_sent_to
+                    st.rerun()
+
+    st.stop()
+
 # ─── Session State ────────────────────────────────────────────────────────────────
 if "current_session_id" not in st.session_state:
     # Resume the most recent session automatically on first load
-    _all = _read_all_sessions()
+    _all = list_all_sessions()
     if _all:
         st.session_state.current_session_id = _all[-1]["id"]
     else:
@@ -1558,26 +1711,67 @@ section[data-testid="stSidebar"] .stButton > button:hover {
 """, unsafe_allow_html=True)
 
 
+# ─── Cloud retrieval: lightweight Pinecone + OpenAI wrapper ──────────────────
+# Matches the llama-index node interface (node.text, node.metadata) so the
+# rest of app.py needs zero changes.
+
+class _PineconeNode:
+    """Minimal stand-in for a llama-index NodeWithScore."""
+    def __init__(self, text: str, metadata: dict):
+        self.text     = text
+        self.metadata = metadata
+
+class _PineconeRetriever:
+    def __init__(self, pinecone_index, top_k: int = 20):
+        self._index = pinecone_index
+        self._top_k = top_k
+
+    def retrieve(self, query: str) -> list:
+        import openai
+        oai = openai.OpenAI()
+        embedding = oai.embeddings.create(
+            input=query,
+            model="text-embedding-ada-002",
+        ).data[0].embedding
+        results = self._index.query(
+            vector=embedding,
+            top_k=self._top_k,
+            include_metadata=True,
+        )
+        return [
+            _PineconeNode(
+                text     = m.metadata.get("text", ""),
+                metadata = m.metadata,
+            )
+            for m in results.matches
+        ]
+
+class _PineconeIndex:
+    def __init__(self, pinecone_index):
+        self._index = pinecone_index
+
+    def as_retriever(self, similarity_top_k: int = 20) -> _PineconeRetriever:
+        return _PineconeRetriever(self._index, top_k=similarity_top_k)
+
+
 # ─── Load Index ─────────────────────────────────────────────────────────────────
 @st.cache_resource
 def load_index():
     if IS_LOCAL:
-        # ── Local: ChromaDB on disk ──────────────────────────────────────────
+        # ── Local: ChromaDB on disk via llama-index ──────────────────────────
         chroma_client = chromadb.PersistentClient(path=CHROMA_PATH)
         chroma_collection = chroma_client.get_or_create_collection(CHROMA_COLLECTION)
         vector_store = ChromaVectorStore(chroma_collection=chroma_collection)
         storage_context = StorageContext.from_defaults(vector_store=vector_store)
-        index = VectorStoreIndex.from_vector_store(
+        return VectorStoreIndex.from_vector_store(
             vector_store,
             storage_context=storage_context,
         )
-        return index
     else:
-        # ── Cloud: Pinecone (to be wired up during cloud migration) ──────────
-        raise NotImplementedError(
-            "Cloud index (Pinecone) not yet configured. "
-            "Set MODE=local in your .env to use the local ChromaDB index."
-        )
+        # ── Cloud: Pinecone directly (no llama-index needed) ─────────────────
+        from config import PINECONE_API_KEY, PINECONE_INDEX
+        pc = PineconeClient(api_key=PINECONE_API_KEY)
+        return _PineconeIndex(pc.Index(PINECONE_INDEX))
 
 
 # ─── Anthropic Client + System Prompt ───────────────────────────────────────────
