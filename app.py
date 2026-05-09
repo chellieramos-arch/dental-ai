@@ -1547,23 +1547,28 @@ section[data-testid="stSidebar"] code {
 }
 
 /* Popover dropdown panel */
-[data-testid="stPopoverBody"] {
-    background: #1a2744 !important;
-    border: 1px solid rgba(253,185,19,0.3) !important;
+[data-testid="stPopoverBody"],
+[data-testid="stPopoverBody"] > div,
+[data-testid="stPopoverBody"] .stVerticalBlock {
+    background: #0f1f45 !important;
+    border: 1px solid rgba(253,185,19,0.35) !important;
     border-radius: 10px !important;
 }
-[data-testid="stPopoverBody"] .stButton > button {
-    background: transparent !important;
+[data-testid="stPopoverBody"] .stButton > button,
+[data-testid="stPopoverBody"] button {
+    background: #162150 !important;
     color: #ffffff !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
+    border: 1px solid rgba(253,185,19,0.25) !important;
     border-radius: 6px !important;
     text-align: left !important;
     animation: none !important;
     box-shadow: none !important;
+    font-weight: 500 !important;
 }
-[data-testid="stPopoverBody"] .stButton > button:hover {
-    background: rgba(253,185,19,0.15) !important;
-    border-color: rgba(253,185,19,0.4) !important;
+[data-testid="stPopoverBody"] .stButton > button:hover,
+[data-testid="stPopoverBody"] button:hover {
+    background: rgba(253,185,19,0.2) !important;
+    border-color: rgba(253,185,19,0.6) !important;
     color: #FDB913 !important;
     transform: none !important;
     box-shadow: none !important;
