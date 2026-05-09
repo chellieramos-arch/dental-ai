@@ -183,6 +183,38 @@ def _is_nsu_email(email: str) -> bool:
 
 if IS_CLOUD and "user_email" not in st.session_state:
     st.set_page_config(page_title="DentAI – NSU Login", page_icon="🦷", layout="centered")
+
+    # ── Handle magic-link redirect (tokens arrive in URL fragment) ────────────
+    # JavaScript converts #access_token=...&refresh_token=... → query params
+    components.html("""
+    <script>
+    const hash = window.parent.location.hash;
+    if (hash && hash.includes('access_token')) {
+        const p = new URLSearchParams(hash.substring(1));
+        const at = p.get('access_token');
+        const rt = p.get('refresh_token') || '';
+        if (at) {
+            window.parent.location.href =
+                window.parent.location.pathname +
+                '?access_token=' + encodeURIComponent(at) +
+                '&refresh_token=' + encodeURIComponent(rt);
+        }
+    }
+    </script>
+    """, height=0)
+
+    # If redirected back with tokens in query params, set session
+    qp = st.query_params
+    if "access_token" in qp:
+        try:
+            sb = _get_supabase()
+            resp = sb.auth.set_session(qp["access_token"], qp.get("refresh_token", ""))
+            st.session_state.user_email = resp.user.email
+            st.query_params.clear()
+            st.rerun()
+        except Exception:
+            st.query_params.clear()
+
     st.markdown("""
         <div style="text-align:center; padding:3rem 0 1.5rem;">
             <h1 style="font-size:2.5rem; margin-bottom:0.25rem;">🦷 Dent<span style="color:#2563eb;">AI</span></h1>
@@ -196,7 +228,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
     with col2:
         sb = _get_supabase()
 
-        # ── Step 1: collect email and send OTP ───────────────────────────────
+        # ── Step 1: collect email and send magic link ─────────────────────────
         if "otp_sent_to" not in st.session_state:
             email_input = st.text_input(
                 "NSU Email Address",
@@ -217,34 +249,13 @@ if IS_CLOUD and "user_email" not in st.session_state:
                     except Exception as e:
                         st.error(f"Could not send code. Please try again. ({e})")
 
-        # ── Step 2: verify OTP code ───────────────────────────────────────────
+        # ── Step 2: waiting for magic link click ──────────────────────────────
         else:
             sent_to = st.session_state.otp_sent_to
-            st.info(f"A 6-digit code was sent to **{sent_to}**. Check your Outlook inbox.")
-            code_input = st.text_input(
-                "Enter your 6-digit code",
-                max_chars=6,
-                placeholder="123456",
-                label_visibility="collapsed",
-            )
-            col_a, col_b = st.columns(2)
-            with col_a:
-                if st.button("Verify Code", use_container_width=True, type="primary"):
-                    try:
-                        resp = sb.auth.verify_otp({
-                            "email": sent_to,
-                            "token": code_input.strip(),
-                            "type":  "email",
-                        })
-                        st.session_state.user_email = resp.user.email
-                        del st.session_state.otp_sent_to
-                        st.rerun()
-                    except Exception:
-                        st.error("Invalid or expired code. Please try again.")
-            with col_b:
-                if st.button("Use a different email", use_container_width=True):
-                    del st.session_state.otp_sent_to
-                    st.rerun()
+            st.info(f"A login link was sent to **{sent_to}**. Check your Outlook inbox and click **Log In**.")
+            if st.button("Use a different email", use_container_width=True):
+                del st.session_state.otp_sent_to
+                st.rerun()
 
     st.stop()
 
