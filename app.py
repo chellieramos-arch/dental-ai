@@ -2328,6 +2328,42 @@ with st.sidebar:
                         delete_session(sess["id"])
                         st.rerun()
 
+    # ── JS: strip pill styling from session load buttons ─────────────────────────
+    _skip = {"Español 🇪🇸", "English 🇺🇸", "🔄 New Chat", "🔄 Nueva Consulta",
+             "⋮", "Save", "Cancel", "✏️  Rename", "🗑  Delete"}
+    _session_titles = [s.get("title","")[:44] for s in _all_sessions]
+    _titles_js = str(_session_titles).replace("'", "\\'")
+    components.html(f"""<script>
+    (function() {{
+        var titles = {_titles_js};
+        function fix() {{
+            var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
+            if (!sidebar) return;
+            sidebar.querySelectorAll('.stButton > button').forEach(function(btn) {{
+                var t = btn.innerText.trim();
+                for (var i = 0; i < titles.length; i++) {{
+                    if (t === titles[i] || t.startsWith(titles[i])) {{
+                        btn.style.setProperty('background','transparent','important');
+                        btn.style.setProperty('border','none','important');
+                        btn.style.setProperty('border-radius','4px','important');
+                        btn.style.setProperty('color','rgba(255,255,255,0.82)','important');
+                        btn.style.setProperty('font-weight','400','important');
+                        btn.style.setProperty('font-size','0.82rem','important');
+                        btn.style.setProperty('text-align','left','important');
+                        btn.style.setProperty('letter-spacing','0','important');
+                        btn.style.setProperty('box-shadow','none','important');
+                        btn.style.setProperty('padding','5px 8px','important');
+                        btn.style.setProperty('width','100%','important');
+                        btn.style.setProperty('animation','none','important');
+                        break;
+                    }}
+                }}
+            }});
+        }}
+        fix(); setTimeout(fix,200); setTimeout(fix,600);
+    }})();
+    </script>""", height=0)
+
     st.markdown("<hr>", unsafe_allow_html=True)
 
     # ── How to use ───────────────────────────────────────────────────────────────
