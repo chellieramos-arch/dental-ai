@@ -1489,53 +1489,54 @@ section[data-testid="stSidebar"] code {
     margin-bottom: 6px;
 }
 
-/* ── Past session list items ── */
+/* ── Past session list items — minimal plain text style ── */
 .sess-item {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 8px;
-    padding: 8px 12px 6px;
-    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 4px;
+    border-radius: 6px;
+    background: rgba(253,185,19,0.10);
 }
-.sess-active {
-    border-color: rgba(253,185,19,0.55) !important;
-    background: rgba(253,185,19,0.10) !important;
+.sess-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #FDB913;
+    flex-shrink: 0;
 }
 .sess-title {
-    color: rgba(255,255,255,0.92) !important;
+    color: #FDB913 !important;
     font-size: 0.82rem;
-    font-weight: 500;
-    line-height: 1.35;
-    word-break: break-word;
-}
-.sess-meta {
-    color: rgba(255,255,255,0.45) !important;
-    font-size: 0.68rem;
-    margin-top: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Session card button — looks like the card */
+/* Session list button — plain text, no card */
 .sess-btn-wrap .stButton > button {
-    background: rgba(255,255,255,0.06) !important;
-    border: 1px solid rgba(255,255,255,0.10) !important;
-    border-radius: 8px !important;
-    padding: 8px 12px !important;
+    background: transparent !important;
+    border: none !important;
+    border-radius: 6px !important;
+    padding: 5px 4px !important;
     text-align: left !important;
     width: 100% !important;
-    color: rgba(255,255,255,0.92) !important;
+    color: rgba(255,255,255,0.75) !important;
     font-size: 0.82rem !important;
-    font-weight: 500 !important;
+    font-weight: 400 !important;
     animation: none !important;
-    white-space: pre-line !important;
-    line-height: 1.4 !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.3 !important;
     height: auto !important;
     min-height: unset !important;
     box-shadow: none !important;
-    margin-bottom: 2px !important;
+    margin-bottom: 0 !important;
 }
 .sess-btn-wrap .stButton > button:hover {
-    background: rgba(253,185,19,0.12) !important;
-    border-color: rgba(253,185,19,0.4) !important;
+    background: rgba(255,255,255,0.08) !important;
+    color: #ffffff !important;
     transform: none !important;
     box-shadow: none !important;
 }
@@ -2260,16 +2261,16 @@ with st.sidebar:
             with col_card:
                 if is_active:
                     st.markdown(
-                        "<div class='sess-item sess-active'>"
+                        "<div class='sess-item'>"
+                        "<div class='sess-dot'></div>"
                         f"<div class='sess-title'>{_title_short}</div>"
-                        f"<div class='sess-meta'>{_date} &middot; {_count} Q&amp;A</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
                 else:
                     st.markdown("<div class='sess-btn-wrap'>", unsafe_allow_html=True)
                     if st.button(
-                        f"{_title_short}\n{_date} · {_count} Q&A",
+                        f"○  {_title_short}",
                         key=f"load_{sess['id']}",
                         use_container_width=True
                     ):
