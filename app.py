@@ -97,16 +97,21 @@ def save_session(session_id: str, history: list) -> None:
 
     if IS_CLOUD:
         try:
+            import json as _json
             sb = _get_supabase()
-            sb.table("chat_sessions").upsert({
+            exchanges_safe = _json.loads(_json.dumps(exchanges, default=str))
+            result = sb.table("chat_sessions").upsert({
                 "id":         session_id,
                 "user_email": _current_user_email(),
                 "title":      title,
-                "exchanges":  exchanges,
+                "exchanges":  exchanges_safe,
             }).execute()
-        except Exception:
-            pass
+            st.session_state["_save_debug"] = f"✅ Saved OK — rows: {result.data} — email: {_current_user_email()}"
+        except Exception as _e:
+            st.session_state["_save_error"] = str(_e)
+            st.session_state["_save_debug"] = f"❌ Exception: {_e}"
         return
+    st.session_state["_save_debug"] = f"⚠️ IS_CLOUD=False — saving locally"
 
     # Local: JSON file
     sessions = _read_all_sessions()
@@ -518,6 +523,13 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# ── Show any deferred save errors (persisted across rerun) ──
+if "_save_error" in st.session_state:
+    st.error(f"⚠️ Session save error: {st.session_state.pop('_save_error')}")
+if "_save_debug" in st.session_state:
+    st.info(st.session_state["_save_debug"])
+
 
 # ─── CSS: Animations + NSU Brand ────────────────────────────────────────────────
 st.markdown("""
@@ -2137,8 +2149,13 @@ with st.sidebar:
         st.session_state.latest_images      = []
         st.rerun()
 
+    # ── Debug info (temporary) ───────────────────────────────────────────────────
+    st.caption(f"Mode: {'☁️ Cloud' if IS_CLOUD else '💻 Local'} | {_current_user_email()}")
+    if "_save_debug" in st.session_state:
+        st.caption(st.session_state["_save_debug"])
+
     # ── Past sessions browser ────────────────────────────────────────────────────
-    _all_sessions = _read_all_sessions()
+    _all_sessions = list_all_sessions()
     if _all_sessions:
         st.markdown("<hr>", unsafe_allow_html=True)
         st.markdown(
