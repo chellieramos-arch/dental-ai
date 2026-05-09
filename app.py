@@ -153,6 +153,21 @@ def delete_session(session_id: str) -> None:
     sessions = [s for s in _read_all_sessions() if s["id"] != session_id]
     _write_all_sessions(sessions)
 
+def rename_session(session_id: str, new_title: str) -> None:
+    """Update just the title of a session."""
+    if IS_CLOUD:
+        try:
+            _get_supabase().table("chat_sessions").update({"title": new_title}).eq("id", session_id).execute()
+        except Exception:
+            pass
+        return
+    sessions = _read_all_sessions()
+    for s in sessions:
+        if s["id"] == session_id:
+            s["title"] = new_title
+            break
+    _write_all_sessions(sessions)
+
 def list_all_sessions() -> list:
     """Return all sessions for the current user."""
     if IS_CLOUD:
@@ -2150,31 +2165,51 @@ with st.sidebar:
             "letter-spacing:0.3px;margin:0 0 10px 0;'>🕘 Past Sessions</p>",
             unsafe_allow_html=True
         )
-        # Show newest first, skip the currently active session
+        # Show newest first
         for sess in reversed(_all_sessions):
-            is_active = sess["id"] == st.session_state.current_session_id
+            is_active   = sess["id"] == st.session_state.current_session_id
+            is_renaming = st.session_state.get("_renaming_id") == sess["id"]
             _date  = sess.get("created_at", "")[:10]
             _count = len(sess.get("exchanges", []))
             _title = sess.get("title", "Untitled")
-            if len(_title) > 44:
-                _title = _title[:44] + "…"
+            _title_short = (_title[:44] + "…") if len(_title) > 44 else _title
 
-            col_card, col_del = st.columns([5, 1])
+            # ── Rename mode ──────────────────────────────────────────────────
+            if is_renaming:
+                new_name = st.text_input(
+                    "Rename",
+                    value=_title,
+                    key=f"rename_input_{sess['id']}",
+                    label_visibility="collapsed",
+                )
+                col_save, col_cancel = st.columns(2)
+                with col_save:
+                    if st.button("Save", key=f"rename_save_{sess['id']}", use_container_width=True):
+                        if new_name.strip():
+                            rename_session(sess["id"], new_name.strip())
+                        del st.session_state["_renaming_id"]
+                        st.rerun()
+                with col_cancel:
+                    if st.button("Cancel", key=f"rename_cancel_{sess['id']}", use_container_width=True):
+                        del st.session_state["_renaming_id"]
+                        st.rerun()
+                continue
+
+            # ── Normal display ───────────────────────────────────────────────
+            col_card, col_edit, col_del = st.columns([5, 1, 1])
             with col_card:
-                # Active session: styled card (not a button)
                 if is_active:
                     st.markdown(
                         "<div class='sess-item sess-active'>"
-                        f"<div class='sess-title'>{_title}</div>"
+                        f"<div class='sess-title'>{_title_short}</div>"
                         f"<div class='sess-meta'>{_date} &middot; {_count} Q&amp;A</div>"
                         "</div>",
                         unsafe_allow_html=True
                     )
                 else:
-                    # Clickable button styled as a card
                     st.markdown("<div class='sess-btn-wrap'>", unsafe_allow_html=True)
                     if st.button(
-                        f"{_title}\n{_date} · {_count} Q&A",
+                        f"{_title_short}\n{_date} · {_count} Q&A",
                         key=f"load_{sess['id']}",
                         use_container_width=True
                     ):
@@ -2183,6 +2218,11 @@ with st.sidebar:
                         st.session_state.latest_images      = []
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
+
+            with col_edit:
+                if st.button("✏️", key=f"edit_{sess['id']}"):
+                    st.session_state["_renaming_id"] = sess["id"]
+                    st.rerun()
 
             with col_del:
                 st.markdown("<div class='sess-del-wrap'>", unsafe_allow_html=True)
