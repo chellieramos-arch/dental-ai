@@ -2207,7 +2207,7 @@ with st.sidebar:
                 continue
 
             # ── Normal display ───────────────────────────────────────────────
-            col_card, col_edit, col_del = st.columns([5, 1, 1])
+            col_card, col_menu = st.columns([6, 1])
             with col_card:
                 if is_active:
                     st.markdown(
@@ -2230,23 +2230,18 @@ with st.sidebar:
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
 
-            with col_edit:
-                st.markdown("<div class='sess-edit-wrap'>", unsafe_allow_html=True)
-                if st.button("✏️", key=f"edit_{sess['id']}"):
-                    st.session_state["_renaming_id"] = sess["id"]
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
-
-            with col_del:
-                st.markdown("<div class='sess-del-wrap'>", unsafe_allow_html=True)
-                if st.button("🗑", key=f"del_{sess['id']}"):
-                    if is_active:
-                        st.session_state.current_session_id = new_session_id()
-                        st.session_state.chat_history       = []
-                        st.session_state.latest_images      = []
-                    delete_session(sess["id"])
-                    st.rerun()
-                st.markdown("</div>", unsafe_allow_html=True)
+            with col_menu:
+                with st.popover("⋮", use_container_width=True):
+                    if st.button("✏️  Rename", key=f"rename_btn_{sess['id']}", use_container_width=True):
+                        st.session_state["_renaming_id"] = sess["id"]
+                        st.rerun()
+                    if st.button("🗑  Delete", key=f"del_btn_{sess['id']}", use_container_width=True):
+                        if is_active:
+                            st.session_state.current_session_id = new_session_id()
+                            st.session_state.chat_history       = []
+                            st.session_state.latest_images      = []
+                        delete_session(sess["id"])
+                        st.rerun()
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
