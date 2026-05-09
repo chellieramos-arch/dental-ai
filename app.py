@@ -1513,15 +1513,15 @@ section[data-testid="stSidebar"] code {
     text-overflow: ellipsis;
 }
 
-/* Session list button — plain text, no card */
-.sess-btn-wrap .stButton > button {
+/* Session list button — plain text, no border, no pill */
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button {
     background: transparent !important;
     border: none !important;
-    border-radius: 6px !important;
-    padding: 5px 4px !important;
+    border-radius: 4px !important;
+    padding: 5px 8px !important;
     text-align: left !important;
     width: 100% !important;
-    color: rgba(255,255,255,0.75) !important;
+    color: rgba(255,255,255,0.80) !important;
     font-size: 0.82rem !important;
     font-weight: 400 !important;
     animation: none !important;
@@ -1533,9 +1533,11 @@ section[data-testid="stSidebar"] code {
     min-height: unset !important;
     box-shadow: none !important;
     margin-bottom: 0 !important;
+    letter-spacing: 0 !important;
 }
-.sess-btn-wrap .stButton > button:hover {
+section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button:hover {
     background: rgba(255,255,255,0.08) !important;
+    border: none !important;
     color: #ffffff !important;
     transform: none !important;
     box-shadow: none !important;
@@ -2270,7 +2272,7 @@ with st.sidebar:
                 else:
                     st.markdown("<div class='sess-btn-wrap'>", unsafe_allow_html=True)
                     if st.button(
-                        f"○  {_title_short}",
+                        _title_short,
                         key=f"load_{sess['id']}",
                         use_container_width=True
                     ):
