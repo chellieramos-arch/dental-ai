@@ -1546,6 +1546,27 @@ section[data-testid="stSidebar"] code {
     text-align: left !important;
 }
 
+/* ⋮ popover trigger button in sidebar */
+section[data-testid="stSidebar"] [data-testid="stPopover"] button {
+    background: rgba(255,255,255,0.08) !important;
+    border: 1px solid rgba(253,185,19,0.3) !important;
+    border-radius: 6px !important;
+    color: #FDB913 !important;
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    min-height: 28px !important;
+    height: 28px !important;
+    box-shadow: none !important;
+    animation: none !important;
+}
+section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
+    background: rgba(253,185,19,0.15) !important;
+    border-color: rgba(253,185,19,0.6) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* Edit + Delete buttons — small ghost (high-specificity to override sidebar globals) */
 section[data-testid="stSidebar"] .sess-edit-wrap .stButton > button,
 section[data-testid="stSidebar"] .sess-del-wrap .stButton > button {
