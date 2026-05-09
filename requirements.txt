@@ -1,0 +1,29 @@
+# DentAI — Cloud Deployment Dependencies
+# Streamlit Community Cloud installs from this file automatically.
+# Pin major versions to avoid surprises; update intentionally.
+
+# ── Core app ──────────────────────────────────────────────────────────────────
+streamlit>=1.50.0
+anthropic>=0.97.0
+python-dotenv>=1.0.0
+
+# ── LlamaIndex ────────────────────────────────────────────────────────────────
+llama-index-core>=0.12.0
+llama-index-embeddings-openai>=0.3.0
+llama-index-readers-file>=0.4.0
+openai>=1.10.0
+
+# ── Vector stores ─────────────────────────────────────────────────────────────
+# Local (used when MODE=local — keep for local dev)
+chromadb>=1.5.0
+llama-index-vector-stores-chroma>=0.4.0
+
+# Cloud (used when MODE=cloud)
+pinecone>=5.0.0
+llama-index-vector-stores-pinecone>=0.4.0
+
+# ── Supabase (per-student chat history) ───────────────────────────────────────
+supabase>=2.0.0
+
+# ── PDF rendering ─────────────────────────────────────────────────────────────
+PyMuPDF>=1.24.0
