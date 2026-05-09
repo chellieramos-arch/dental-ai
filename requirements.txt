@@ -14,13 +14,9 @@ llama-index-readers-file>=0.4.0
 openai>=1.10.0
 
 # ── Vector stores ─────────────────────────────────────────────────────────────
-# Local (used when MODE=local — keep for local dev)
-chromadb>=1.5.0
-llama-index-vector-stores-chroma>=0.4.0
-
 # Cloud (used when MODE=cloud)
+# NOTE: chromadb is local-only — install manually with pip for local dev
 pinecone>=5.0.0
-llama-index-vector-stores-pinecone>=0.4.0
 
 # ── Supabase (per-student chat history) ───────────────────────────────────────
 supabase>=2.0.0
