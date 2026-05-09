@@ -1546,28 +1546,31 @@ section[data-testid="stSidebar"] code {
     text-align: left !important;
 }
 
-/* Edit + Delete buttons — small ghost */
-.sess-edit-wrap .stButton > button,
-.sess-del-wrap .stButton > button {
+/* Edit + Delete buttons — small ghost (high-specificity to override sidebar globals) */
+section[data-testid="stSidebar"] .sess-edit-wrap .stButton > button,
+section[data-testid="stSidebar"] .sess-del-wrap .stButton > button {
     background: transparent !important;
-    border: 1px solid rgba(255,255,255,0.12) !important;
+    border: 1px solid rgba(255,255,255,0.18) !important;
     border-radius: 6px !important;
-    padding: 4px 6px !important;
-    font-size: 0.8rem !important;
-    width: auto !important;
+    padding: 2px 5px !important;
+    font-size: 0.75rem !important;
+    min-height: 26px !important;
+    height: 26px !important;
+    width: 26px !important;
+    line-height: 1 !important;
     animation: none !important;
-    color: rgba(255,255,255,0.4) !important;
+    color: rgba(255,255,255,0.45) !important;
     box-shadow: none !important;
-    margin-top: 2px !important;
+    margin: 0 !important;
 }
-.sess-edit-wrap .stButton > button:hover {
+section[data-testid="stSidebar"] .sess-edit-wrap .stButton > button:hover {
     background: rgba(253,185,19,0.15) !important;
-    border-color: rgba(253,185,19,0.4) !important;
+    border-color: rgba(253,185,19,0.5) !important;
     color: #FDB913 !important;
     transform: none !important;
     box-shadow: none !important;
 }
-.sess-del-wrap .stButton > button:hover {
+section[data-testid="stSidebar"] .sess-del-wrap .stButton > button:hover {
     background: rgba(220,50,50,0.15) !important;
     border-color: rgba(220,50,50,0.4) !important;
     color: #ff6b6b !important;
