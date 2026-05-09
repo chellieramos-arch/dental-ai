@@ -1546,6 +1546,29 @@ section[data-testid="stSidebar"] code {
     text-align: left !important;
 }
 
+/* Popover dropdown panel */
+[data-testid="stPopoverBody"] {
+    background: #1a2744 !important;
+    border: 1px solid rgba(253,185,19,0.3) !important;
+    border-radius: 10px !important;
+}
+[data-testid="stPopoverBody"] .stButton > button {
+    background: transparent !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255,255,255,0.12) !important;
+    border-radius: 6px !important;
+    text-align: left !important;
+    animation: none !important;
+    box-shadow: none !important;
+}
+[data-testid="stPopoverBody"] .stButton > button:hover {
+    background: rgba(253,185,19,0.15) !important;
+    border-color: rgba(253,185,19,0.4) !important;
+    color: #FDB913 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* ⋮ popover trigger button in sidebar */
 section[data-testid="stSidebar"] [data-testid="stPopover"] button {
     background: rgba(255,255,255,0.08) !important;
