@@ -106,12 +106,9 @@ def save_session(session_id: str, history: list) -> None:
                 "title":      title,
                 "exchanges":  exchanges_safe,
             }).execute()
-            st.session_state["_save_debug"] = f"✅ Saved OK — rows: {result.data} — email: {_current_user_email()}"
-        except Exception as _e:
-            st.session_state["_save_error"] = str(_e)
-            st.session_state["_save_debug"] = f"❌ Exception: {_e}"
+        except Exception:
+            pass
         return
-    st.session_state["_save_debug"] = f"⚠️ IS_CLOUD=False — saving locally"
 
     # Local: JSON file
     sessions = _read_all_sessions()
@@ -524,11 +521,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ── Show any deferred save errors (persisted across rerun) ──
-if "_save_error" in st.session_state:
-    st.error(f"⚠️ Session save error: {st.session_state.pop('_save_error')}")
-if "_save_debug" in st.session_state:
-    st.info(st.session_state["_save_debug"])
 
 
 # ─── CSS: Animations + NSU Brand ────────────────────────────────────────────────
@@ -2148,11 +2140,6 @@ with st.sidebar:
         st.session_state.chat_history       = []
         st.session_state.latest_images      = []
         st.rerun()
-
-    # ── Debug info (temporary) ───────────────────────────────────────────────────
-    st.caption(f"Mode: {'☁️ Cloud' if IS_CLOUD else '💻 Local'} | {_current_user_email()}")
-    if "_save_debug" in st.session_state:
-        st.caption(st.session_state["_save_debug"])
 
     # ── Past sessions browser ────────────────────────────────────────────────────
     _all_sessions = list_all_sessions()
