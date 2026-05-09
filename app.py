@@ -1546,7 +1546,8 @@ section[data-testid="stSidebar"] code {
     text-align: left !important;
 }
 
-/* Delete button — small ghost */
+/* Edit + Delete buttons — small ghost */
+.sess-edit-wrap .stButton > button,
 .sess-del-wrap .stButton > button {
     background: transparent !important;
     border: 1px solid rgba(255,255,255,0.12) !important;
@@ -1558,6 +1559,13 @@ section[data-testid="stSidebar"] code {
     color: rgba(255,255,255,0.4) !important;
     box-shadow: none !important;
     margin-top: 2px !important;
+}
+.sess-edit-wrap .stButton > button:hover {
+    background: rgba(253,185,19,0.15) !important;
+    border-color: rgba(253,185,19,0.4) !important;
+    color: #FDB913 !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 .sess-del-wrap .stButton > button:hover {
     background: rgba(220,50,50,0.15) !important;
@@ -2196,7 +2204,7 @@ with st.sidebar:
                 continue
 
             # ── Normal display ───────────────────────────────────────────────
-            col_card, col_icons = st.columns([5, 2])
+            col_card, col_edit, col_del = st.columns([5, 1, 1])
             with col_card:
                 if is_active:
                     st.markdown(
@@ -2219,20 +2227,23 @@ with st.sidebar:
                         st.rerun()
                     st.markdown("</div>", unsafe_allow_html=True)
 
-            with col_icons:
-                ic1, ic2 = st.columns(2)
-                with ic1:
-                    if st.button("✏️", key=f"edit_{sess['id']}", use_container_width=True):
-                        st.session_state["_renaming_id"] = sess["id"]
-                        st.rerun()
-                with ic2:
-                    if st.button("🗑", key=f"del_{sess['id']}", use_container_width=True):
-                        if is_active:
-                            st.session_state.current_session_id = new_session_id()
-                            st.session_state.chat_history       = []
-                            st.session_state.latest_images      = []
-                        delete_session(sess["id"])
-                        st.rerun()
+            with col_edit:
+                st.markdown("<div class='sess-edit-wrap'>", unsafe_allow_html=True)
+                if st.button("✏️", key=f"edit_{sess['id']}"):
+                    st.session_state["_renaming_id"] = sess["id"]
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
+
+            with col_del:
+                st.markdown("<div class='sess-del-wrap'>", unsafe_allow_html=True)
+                if st.button("🗑", key=f"del_{sess['id']}"):
+                    if is_active:
+                        st.session_state.current_session_id = new_session_id()
+                        st.session_state.chat_history       = []
+                        st.session_state.latest_images      = []
+                    delete_session(sess["id"])
+                    st.rerun()
+                st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
