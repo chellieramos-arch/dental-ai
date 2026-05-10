@@ -2271,9 +2271,9 @@ with st.sidebar:
                     _safe_title = _title_short.replace("'", "&#39;").replace('"', "&quot;")
                     st.markdown(
                         f"<div class='sess-row' "
-                        f"onclick=\"(function(){{var u=new URL(window.parent.location);"
+                        f"onclick=\"(function(){{var u=new URL(window.location);"
                         f"u.searchParams.set('load_sess','{_sid}');"
-                        f"window.parent.location=u;}})()\">"
+                        f"window.location=u;}})()\">"
                         f"<span class='sess-label'>{_safe_title}</span></div>",
                         unsafe_allow_html=True
                     )
