@@ -242,12 +242,76 @@ if IS_CLOUD and "user_email" not in st.session_state:
 
 if IS_CLOUD and "user_email" not in st.session_state:
     st.markdown("""
-        <div style="text-align:center; padding:3rem 0 1.5rem;">
-            <h1 style="font-size:2.5rem; margin-bottom:0.25rem;">🦷 Dent<span style="color:#2563eb;">AI</span></h1>
-            <p style="color:#6b7280; font-size:1.05rem;">
-                NSU College of Dental Medicine · Clinical Study Assistant
-            </p>
-        </div>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+      :root {
+        --bg: #050a12; --surface: #0c1524;
+        --border: rgba(0,200,255,0.15); --cyan: #00c8ff;
+        --purple: #7b5ea7; --text: #e8f0fe; --muted: #7a90b0;
+      }
+
+      [data-testid="stAppViewContainer"], .main {
+        background: var(--bg) !important;
+        font-family: 'Inter', sans-serif;
+      }
+      [data-testid="stHeader"] { display: none; }
+      #MainMenu, footer { visibility: hidden; }
+
+      /* inputs */
+      [data-testid="stTextInput"] input {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        color: var(--text) !important;
+        font-size: 0.95rem !important;
+        padding: 12px 16px !important;
+      }
+      [data-testid="stTextInput"] input::placeholder { color: var(--muted) !important; }
+      [data-testid="stTextInput"] input:focus {
+        border-color: var(--cyan) !important;
+        box-shadow: 0 0 0 3px rgba(0,200,255,0.08) !important;
+      }
+      [data-testid="stTextInput"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
+
+      /* primary button */
+      .stButton > button[kind="primary"] {
+        background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
+        color: #000 !important; font-weight: 800 !important;
+        border: none !important; border-radius: 10px !important;
+        font-size: 0.95rem !important; padding: 12px !important;
+      }
+      .stButton > button[kind="primary"] p { color: #000 !important; font-weight: 800 !important; }
+      .stButton > button[kind="primary"]:hover {
+        box-shadow: 0 4px 20px rgba(0,200,255,0.35) !important;
+        transform: translateY(-1px) !important;
+      }
+
+      /* info/error boxes */
+      [data-testid="stAlert"] {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        color: var(--text) !important;
+      }
+
+      /* all text */
+      p, span, label, div { color: var(--text); }
+    </style>
+
+    <div style="text-align:center; padding:3.5rem 0 2rem;">
+      <div style="width:64px;height:64px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+                  border-radius:16px;margin:0 auto 20px;display:flex;align-items:center;
+                  justify-content:center;font-family:'Space Grotesk',sans-serif;
+                  font-size:24px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:2rem;font-weight:700;
+                  color:#e8f0fe;letter-spacing:-0.02em;margin-bottom:8px;">
+        Dent<span style="color:#00c8ff;">AI</span> Assist
+      </div>
+      <div style="font-size:0.9rem;color:#7a90b0;font-weight:500;">
+        NSU College of Dental Medicine &nbsp;·&nbsp; Student Study Portal
+      </div>
+    </div>
     """, unsafe_allow_html=True)
 
     col1, col2, col3 = st.columns([1, 2, 1])
