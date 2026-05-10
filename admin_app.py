@@ -404,8 +404,8 @@ def show_login():
                       justify-content:center;font-family:'Space Grotesk',sans-serif;
                       font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
           <div style="font-size:1.4rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">DentAI Admin</div>
-          <div style="font-size:0.85rem;color:#7a90b0;margin-top:6px;margin-bottom:28px;">
-            NSU College of Dental Medicine
+          <div style="font-size:0.85rem;color:#00c8ff;margin-top:6px;margin-bottom:28px;font-weight:500;letter-spacing:0.04em;">
+            Faculty &amp; Admin Portal
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -422,8 +422,8 @@ def show_login():
             else:
                 st.error("Incorrect password.")
         st.markdown(
-            "<p style='text-align:center;font-size:0.78rem;color:#9ca3af;margin-top:14px;'>"
-            "Faculty &amp; staff access only</p>",
+            "<p style='text-align:center;font-size:0.78rem;color:#7a90b0;margin-top:14px;letter-spacing:0.04em;'>"
+            "🔒 Faculty &amp; staff access only</p>",
             unsafe_allow_html=True)
 
 
