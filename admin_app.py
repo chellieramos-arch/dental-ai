@@ -1,0 +1,720 @@
+"""
+DentAI — Faculty & Admin Dashboard
+────────────────────────────────────
+Standalone Streamlit app for NSU dental faculty to manage the
+DentAI knowledge base.
+
+Run locally:
+  streamlit run admin_app.py --server.port 8502
+"""
+
+import os
+import io
+import time
+from datetime import datetime
+from urllib.parse import urlparse
+
+import streamlit as st
+from dotenv import load_dotenv
+
+# ── Secrets → env ─────────────────────────────────────────────────────────────
+try:
+    for _k, _v in st.secrets.items():
+        if isinstance(_v, str):
+            os.environ.setdefault(_k, _v)
+except Exception:
+    pass
+
+load_dotenv()
+os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
+
+# ── Page config ───────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="DentAI Admin",
+    page_icon=None,
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Global styles ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+  /* ── Base ── */
+  [data-testid="stAppViewContainer"] {
+    background: #f4f6f9;
+  }
+  [data-testid="stHeader"] { background: transparent; display: none; }
+  #MainMenu, footer { visibility: hidden; }
+
+  /* ── Sidebar ── */
+  [data-testid="stSidebar"] {
+    background: #0f1117 !important;
+    border-right: none;
+  }
+  [data-testid="stSidebar"] * {
+    color: #c9cdd6 !important;
+  }
+  [data-testid="stSidebar"] .sidebar-logo {
+    padding: 28px 20px 20px;
+    border-bottom: 1px solid #1e2130;
+    margin-bottom: 8px;
+  }
+  [data-testid="stSidebar"] hr {
+    border-color: #1e2130 !important;
+  }
+
+  /* ── Nav buttons in sidebar ── */
+  [data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: none !important;
+    color: #8b91a1 !important;
+    text-align: left !important;
+    width: 100% !important;
+    padding: 10px 16px !important;
+    border-radius: 8px !important;
+    font-size: 0.88rem !important;
+    font-weight: 500 !important;
+    transition: all 0.15s !important;
+    margin-bottom: 2px !important;
+  }
+  [data-testid="stSidebar"] .stButton > button:hover {
+    background: #1e2130 !important;
+    color: #ffffff !important;
+  }
+  [data-testid="stSidebar"] .nav-active > button {
+    background: #1e2130 !important;
+    color: #ffffff !important;
+  }
+
+  /* ── Cards ── */
+  .card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 28px 32px;
+    margin-bottom: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card h4 {
+    margin: 0 0 4px 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #111827;
+  }
+  .card-caption {
+    font-size: 0.82rem;
+    color: #6b7280;
+    margin-bottom: 16px;
+  }
+
+  /* ── Stat cards ── */
+  .stat-card {
+    background: #ffffff;
+    border-radius: 12px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .stat-icon {
+    width: 48px; height: 48px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 10px;
+    flex-shrink: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .stat-icon.blue   { background: #eff6ff; color: #1d4ed8; }
+  .stat-icon.green  { background: #f0fdf4; color: #15803d; }
+  .stat-icon.purple { background: #faf5ff; color: #7c3aed; }
+  .stat-num { font-size: 1.8rem; font-weight: 700; color: #111827; line-height: 1; }
+  .stat-lbl { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }
+
+  /* ── Source rows ── */
+  .src-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+  .src-item:last-child { border-bottom: none; }
+  .file-type-badge {
+    width: 38px; height: 34px;
+    border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.62rem; font-weight: 700;
+    letter-spacing: 0.04em; flex-shrink: 0;
+    text-transform: uppercase;
+  }
+  .file-type-badge.pdf  { background: #fee2e2; color: #b91c1c; }
+  .file-type-badge.doc  { background: #dbeafe; color: #1d4ed8; }
+  .file-type-badge.ppt  { background: #ffedd5; color: #c2410c; }
+  .file-type-badge.web  { background: #f0fdf4; color: #15803d; }
+  .file-type-badge.txt  { background: #f3f4f6; color: #374151; }
+  .src-name { font-size: 0.88rem; color: #111827; font-weight: 500; flex: 1; }
+  .src-date { font-size: 0.75rem; color: #9ca3af; }
+
+  /* ── Page title ── */
+  .page-title {
+    font-size: 1.35rem; font-weight: 700; color: #111827;
+    margin-bottom: 2px;
+  }
+  .page-sub {
+    font-size: 0.85rem; color: #6b7280;
+    margin-bottom: 24px;
+  }
+
+  /* ── Upload area ── */
+  [data-testid="stFileUploader"] {
+    border: 1.5px dashed #d1d5db !important;
+    border-radius: 10px !important;
+    background: #fafafa !important;
+    padding: 8px !important;
+  }
+
+  /* ── Primary button ── */
+  .stButton > button[kind="primary"] {
+    background: #111827 !important;
+    color: #ffffff !important;
+    border: none !important;
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    padding: 10px 20px !important;
+  }
+  .stButton > button[kind="primary"]:hover {
+    background: #1f2937 !important;
+  }
+
+  /* ── Login ── */
+  .login-container {
+    max-width: 400px;
+    margin: 60px auto;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 44px 40px;
+    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
+    text-align: center;
+  }
+
+  /* ── Badge ── */
+  .badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    background: #f0fdf4;
+    color: #16a34a;
+  }
+
+  /* ── Scrollable list ── */
+  .scroll-list {
+    max-height: 420px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .scroll-list::-webkit-scrollbar { width: 4px; }
+  .scroll-list::-webkit-scrollbar-track { background: transparent; }
+  .scroll-list::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+</style>
+""", unsafe_allow_html=True)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Constants
+# ─────────────────────────────────────────────────────────────────────────────
+EMBED_MODEL    = "text-embedding-ada-002"
+CHUNK_SIZE     = 1500
+CHUNK_OVERLAP  = 200
+BATCH_SIZE     = 96
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+def file_type_badge(name: str) -> str:
+    """Return an HTML badge reflecting the file type."""
+    ext = os.path.splitext(name)[1].lower()
+    if ext == ".pdf":
+        return '<div class="file-type-badge pdf">PDF</div>'
+    elif ext == ".docx":
+        return '<div class="file-type-badge doc">DOC</div>'
+    elif ext == ".pptx":
+        return '<div class="file-type-badge ppt">PPT</div>'
+    elif ext == ".txt":
+        return '<div class="file-type-badge txt">TXT</div>'
+    else:
+        return '<div class="file-type-badge web">WEB</div>'
+
+
+def chunk_text(text):
+    chunks, start = [], 0
+    while start < len(text):
+        chunks.append(text[start : start + CHUNK_SIZE])
+        start += CHUNK_SIZE - CHUNK_OVERLAP
+    return [c.strip() for c in chunks if c.strip()]
+
+def extract_pdf(b):
+    import fitz
+    doc = fitz.open(stream=b, filetype="pdf")
+    text = "".join(p.get_text() for p in doc); doc.close(); return text
+
+def extract_docx(b):
+    from docx import Document
+    return "\n".join(p.text for p in Document(io.BytesIO(b)).paragraphs if p.text.strip())
+
+def extract_pptx(b):
+    from pptx import Presentation
+    lines = []
+    for slide in Presentation(io.BytesIO(b)).slides:
+        for shape in slide.shapes:
+            if hasattr(shape, "text") and shape.text.strip():
+                lines.append(shape.text.strip())
+    return "\n".join(lines)
+
+def extract_url(url):
+    import requests
+    from bs4 import BeautifulSoup
+    r = requests.get(url, timeout=15, headers={"User-Agent": "DentAI-Admin/1.0"})
+    r.raise_for_status()
+    soup  = BeautifulSoup(r.text, "html.parser")
+    title = soup.title.string.strip() if soup.title else urlparse(url).netloc
+    for t in soup(["script","style","nav","footer","header"]): t.decompose()
+    lines = [l.strip() for l in soup.get_text("\n").splitlines() if l.strip()]
+    return title, "\n".join(lines)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pinecone
+# ─────────────────────────────────────────────────────────────────────────────
+
+@st.cache_resource
+def get_index():
+    from pinecone import Pinecone
+    pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY",""))
+    return pc.Index(os.getenv("PINECONE_INDEX","dentai"))
+
+def embed_and_upsert(source_name, text):
+    import openai
+    idx    = get_index()
+    oai    = openai.OpenAI()
+    chunks = chunk_text(text)
+    if not chunks: return 0
+    total = 0
+    for i in range(0, len(chunks), BATCH_SIZE):
+        batch = chunks[i:i+BATCH_SIZE]
+        resp  = oai.embeddings.create(input=batch, model=EMBED_MODEL)
+        idx.upsert(vectors=[{
+            "id": f"{source_name}::{i+j}",
+            "values": item.embedding,
+            "metadata": {
+                "text": batch[j], "file_name": source_name,
+                "chunk_index": i+j,
+                "uploaded_at": datetime.utcnow().isoformat(),
+            },
+        } for j, item in enumerate(resp.data)])
+        total += len(batch)
+    return total
+
+def fetch_stats():
+    try:
+        s = get_index().describe_index_stats()
+        return s.get("total_vector_count", 0)
+    except: return 0
+
+def list_sources():
+    try:
+        res = get_index().query(vector=[0.0]*1536, top_k=200, include_metadata=True)
+        seen, out = set(), []
+        for m in res.get("matches",[]):
+            meta = m.get("metadata",{}); name = meta.get("file_name","unknown")
+            if name not in seen:
+                seen.add(name)
+                out.append({"name": name, "uploaded_at": meta.get("uploaded_at","")})
+        return sorted(out, key=lambda x: x["uploaded_at"], reverse=True)
+    except: return []
+
+def delete_source(name):
+    try:
+        idx = get_index()
+        res = idx.query(vector=[0.0]*1536, top_k=1000, include_metadata=True,
+                        filter={"file_name":{"$eq": name}})
+        ids = [m["id"] for m in res.get("matches",[])]
+        if ids: idx.delete(ids=ids)
+        return len(ids)
+    except: return 0
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Login
+# ─────────────────────────────────────────────────────────────────────────────
+
+def show_login():
+    _, col, _ = st.columns([1, 1.2, 1])
+    with col:
+        st.markdown("""
+        <div class="login-container">
+          <div style="width:52px;height:52px;background:#111827;border-radius:12px;
+                      margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:22px;height:22px;border:2.5px solid #ffffff;border-radius:50%;"></div>
+          </div>
+          <div style="font-size:1.3rem;font-weight:700;color:#111827;">DentAI Admin</div>
+          <div style="font-size:0.85rem;color:#6b7280;margin-top:4px;margin-bottom:28px;">
+            NSU College of Dental Medicine
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        pw = st.text_input("Password", type="password",
+                           placeholder="Admin password",
+                           label_visibility="collapsed")
+        if st.button("Sign in", use_container_width=True, type="primary"):
+            if ADMIN_PASSWORD and pw == ADMIN_PASSWORD:
+                st.session_state["admin_auth"] = True
+                st.session_state.pop("sources_cache", None)
+                st.rerun()
+            elif not ADMIN_PASSWORD:
+                st.error("ADMIN_PASSWORD not set in secrets.")
+            else:
+                st.error("Incorrect password.")
+        st.markdown(
+            "<p style='text-align:center;font-size:0.78rem;color:#9ca3af;margin-top:14px;'>"
+            "Faculty &amp; staff access only</p>",
+            unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Sidebar nav
+# ─────────────────────────────────────────────────────────────────────────────
+
+def show_sidebar():
+    with st.sidebar:
+        st.markdown("""
+        <div class="sidebar-logo">
+          <div style="font-size:1.05rem;font-weight:700;color:#ffffff;letter-spacing:0.3px;">
+            DentAI
+          </div>
+          <div style="font-size:0.75rem;color:#4b5563;margin-top:3px;">
+            Faculty Dashboard
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        pages = ["Overview", "Upload Content", "Knowledge Base"]
+
+        for label in pages:
+            active = st.session_state.get("page") == label
+            st.markdown(f"<div class='{'nav-active' if active else ''}'>", unsafe_allow_html=True)
+            if st.button(label, key=f"nav_{label}", use_container_width=True):
+                st.session_state["page"] = label
+                st.rerun()
+            st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        st.markdown(
+            "<div style='padding:12px 16px;'>"
+            "<div style='font-size:0.75rem;color:#4b5563;'>Signed in as</div>"
+            "<div style='font-size:0.82rem;color:#9ca3af;margin-top:2px;'>Faculty / Admin</div>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
+        if st.button("Sign out", use_container_width=True, key="signout"):
+            for k in ["admin_auth","sources_cache","page"]:
+                st.session_state.pop(k, None)
+            st.rerun()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Pages
+# ─────────────────────────────────────────────────────────────────────────────
+
+def page_overview():
+    sources    = st.session_state.get("sources_cache") or list_sources()
+    st.session_state["sources_cache"] = sources
+    total_vecs = fetch_stats()
+
+    st.markdown('<div class="page-title">Overview</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-sub">Your knowledge base at a glance.</div>', unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns(3, gap="medium")
+    with c1:
+        st.markdown(f"""
+        <div class="stat-card">
+          <div class="stat-icon blue">Docs</div>
+          <div>
+            <div class="stat-num">{len(sources)}</div>
+            <div class="stat-lbl">Documents indexed</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"""
+        <div class="stat-card">
+          <div class="stat-icon green">Vec</div>
+          <div>
+            <div class="stat-num">{total_vecs:,}</div>
+            <div class="stat-lbl">Total chunks in Pinecone</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"""
+        <div class="stat-card">
+          <div class="stat-icon purple">Stu</div>
+          <div>
+            <div class="stat-num">~500</div>
+            <div class="stat-lbl">Students with access</div>
+          </div>
+        </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.markdown("<h4>Recently Added</h4>", unsafe_allow_html=True)
+    st.markdown('<div class="card-caption">The last 5 documents added to the knowledge base.</div>', unsafe_allow_html=True)
+
+    recent = sources[:5]
+    if not recent:
+        st.info("No documents indexed yet.")
+    else:
+        for src in recent:
+            name     = src["name"]
+            date_str = src["uploaded_at"][:10] if src["uploaded_at"] else "—"
+            badge    = file_type_badge(name)
+            st.markdown(f"""
+            <div class="src-item">
+              {badge}
+              <div class="src-name">{name}</div>
+              <div class="src-date">{date_str}</div>
+              <span class="badge">Live</span>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def page_upload():
+    st.markdown('<div class="page-title">Upload Content</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-sub">Add course materials to the DentAI knowledge base.</div>', unsafe_allow_html=True)
+
+    left, right = st.columns([1.1, 1], gap="large")
+
+    with left:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h4>Upload Files</h4>", unsafe_allow_html=True)
+        st.markdown('<div class="card-caption">Supported formats: PDF, Word (.docx), PowerPoint (.pptx), plain text (.txt)</div>', unsafe_allow_html=True)
+
+        uploaded = st.file_uploader(
+            "Drop files here",
+            accept_multiple_files=True,
+            type=["pdf","docx","pptx","txt"],
+            label_visibility="collapsed",
+        )
+
+        if uploaded:
+            st.markdown(
+                f"<div style='font-size:0.83rem;color:#374151;margin:8px 0;'>"
+                f"<b>{len(uploaded)}</b> file(s) ready to index</div>",
+                unsafe_allow_html=True,
+            )
+
+        if st.button("Index Files", disabled=not uploaded,
+                     use_container_width=True, type="primary"):
+            bar  = st.progress(0, text="Starting…")
+            logs = []
+            for i, f in enumerate(uploaded):
+                bar.progress(i / len(uploaded), text=f"Processing {f.name}…")
+                try:
+                    raw = f.read()
+                    ext = os.path.splitext(f.name)[1].lower()
+                    if ext == ".pdf":    text = extract_pdf(raw)
+                    elif ext == ".docx": text = extract_docx(raw)
+                    elif ext == ".pptx": text = extract_pptx(raw)
+                    elif ext == ".txt":  text = raw.decode("utf-8","replace")
+                    else:
+                        logs.append(("warn", f"Skipped unsupported format: {f.name}")); continue
+                    if not text.strip():
+                        logs.append(("warn", f"No text found in: {f.name}")); continue
+                    n = embed_and_upsert(f.name, text)
+                    logs.append(("ok", f"{f.name} — {n} chunks indexed"))
+                except Exception as e:
+                    logs.append(("err", f"{f.name} — {e}"))
+            bar.progress(1.0, text="Done!")
+            time.sleep(0.4); bar.empty()
+            for kind, msg in logs:
+                if kind == "ok":     st.success(msg)
+                elif kind == "warn": st.warning(msg)
+                else:                st.error(msg)
+            st.session_state.pop("sources_cache", None)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h4>Index a Web URL</h4>", unsafe_allow_html=True)
+        st.markdown('<div class="card-caption">ADA guidelines, NSU pages, clinical protocols — any publicly accessible URL.</div>', unsafe_allow_html=True)
+
+        url_val = st.text_input("URL", placeholder="https://www.ada.org/…",
+                                label_visibility="collapsed")
+        if st.button("Index URL", disabled=not url_val.strip(),
+                     use_container_width=True, type="primary"):
+            with st.spinner("Fetching page…"):
+                try:
+                    title, text = extract_url(url_val.strip())
+                    n = embed_and_upsert(title or urlparse(url_val).netloc, text)
+                    st.success(f"'{title}' indexed — {n} chunks added.")
+                    st.session_state.pop("sources_cache", None)
+                except Exception as e:
+                    st.error(str(e))
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with right:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h4>How it works</h4>", unsafe_allow_html=True)
+        st.markdown("""
+        <div class="card-caption" style="margin-bottom:20px;">
+          Once uploaded, content is immediately available to students.
+        </div>
+        <div style="display:flex;flex-direction:column;gap:18px;">
+          <div style="display:flex;gap:14px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:0.8rem;font-weight:700;color:#374151;flex-shrink:0;">1</div>
+            <div>
+              <div style="font-size:0.88rem;font-weight:600;color:#111827;">Upload your file</div>
+              <div style="font-size:0.8rem;color:#6b7280;margin-top:2px;">
+                Drag a PDF, Word doc, or PowerPoint onto the upload area.
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:0.8rem;font-weight:700;color:#374151;flex-shrink:0;">2</div>
+            <div>
+              <div style="font-size:0.88rem;font-weight:600;color:#111827;">Text is extracted and chunked</div>
+              <div style="font-size:0.8rem;color:#6b7280;margin-top:2px;">
+                The document is split into searchable sections.
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:0.8rem;font-weight:700;color:#374151;flex-shrink:0;">3</div>
+            <div>
+              <div style="font-size:0.88rem;font-weight:600;color:#111827;">Indexed into Pinecone</div>
+              <div style="font-size:0.8rem;color:#6b7280;margin-top:2px;">
+                Sections are embedded and stored in the vector database.
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;align-items:flex-start;">
+            <div style="width:28px;height:28px;border-radius:50%;background:#f3f4f6;
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:0.8rem;font-weight:700;color:#374151;flex-shrink:0;">4</div>
+            <div>
+              <div style="font-size:0.88rem;font-weight:600;color:#111827;">Live for students</div>
+              <div style="font-size:0.8rem;color:#6b7280;margin-top:2px;">
+                Students can immediately ask questions about the new material.
+              </div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+
+def page_knowledge_base():
+    st.markdown('<div class="page-title">Knowledge Base</div>', unsafe_allow_html=True)
+    st.markdown('<div class="page-sub">All documents currently available to students.</div>', unsafe_allow_html=True)
+
+    sources = st.session_state.get("sources_cache") or list_sources()
+    st.session_state["sources_cache"] = sources
+
+    t_left, t_right = st.columns([3, 1])
+    with t_left:
+        search = st.text_input("Search", placeholder="Filter by filename…",
+                               label_visibility="collapsed")
+    with t_right:
+        if st.button("Refresh", use_container_width=True):
+            st.session_state.pop("sources_cache", None)
+            st.rerun()
+
+    filtered = [s for s in sources if not search or search.lower() in s["name"].lower()]
+
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+
+    if not filtered:
+        st.info("No documents found." if search else "No documents indexed yet.")
+    else:
+        st.markdown(
+            f"<div style='font-size:0.82rem;color:#6b7280;margin-bottom:12px;'>"
+            f"{len(filtered)} document(s)</div>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("""
+        <div style="display:flex;padding:0 4px 8px;border-bottom:1px solid #f3f4f6;
+                    font-size:0.72rem;font-weight:600;color:#9ca3af;text-transform:uppercase;
+                    letter-spacing:0.06em;">
+          <div style="flex:1;">Document</div>
+          <div style="width:100px;">Date Added</div>
+          <div style="width:80px;"></div>
+        </div>""", unsafe_allow_html=True)
+
+        st.markdown('<div class="scroll-list">', unsafe_allow_html=True)
+        for src in filtered:
+            name     = src["name"]
+            date_str = src["uploaded_at"][:10] if src["uploaded_at"] else "—"
+            badge    = file_type_badge(name)
+
+            row_l, row_c, row_r = st.columns([5, 1.2, 0.8])
+            with row_l:
+                st.markdown(
+                    f"<div class='src-item' style='border:none;padding:8px 0;'>"
+                    f"{badge}"
+                    f"<div>"
+                    f"<div class='src-name'>{name}</div>"
+                    f"<span class='badge'>Live</span>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+            with row_c:
+                st.markdown(
+                    f"<div style='font-size:0.78rem;color:#9ca3af;padding-top:14px;'>{date_str}</div>",
+                    unsafe_allow_html=True,
+                )
+            with row_r:
+                if st.button("Remove", key=f"del_{name}"):
+                    with st.spinner("Removing…"):
+                        n = delete_source(name)
+                    st.warning(f"Removed '{name}' ({n} chunks).")
+                    st.session_state.pop("sources_cache", None)
+                    st.rerun()
+
+            st.markdown(
+                "<hr style='margin:0;border:none;border-top:1px solid #f9fafb;'>",
+                unsafe_allow_html=True,
+            )
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────────────────────
+
+if not ADMIN_PASSWORD:
+    st.error("ADMIN_PASSWORD is not set. Add it to .streamlit/secrets.toml.")
+    st.stop()
+
+if not st.session_state.get("admin_auth"):
+    show_login()
+else:
+    if "page" not in st.session_state:
+        st.session_state["page"] = "Overview"
+    show_sidebar()
+    page = st.session_state.get("page", "Overview")
+    if page == "Overview":         page_overview()
+    elif page == "Upload Content": page_upload()
+    elif page == "Knowledge Base": page_knowledge_base()
