@@ -30,7 +30,7 @@ if IS_LOCAL:
 if IS_CLOUD:
     from pinecone import Pinecone as PineconeClient
     from supabase import create_client as create_supabase_client
-    from streamlit_cookies_controller import CookieController
+    import extra_streamlit_components as stx
 
 try:
     import fitz  # PyMuPDF
@@ -199,39 +199,48 @@ _NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
 def _is_nsu_email(email: str) -> bool:
     return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
 
-# ─── Cookie controller (cloud only) — must be instantiated before any st.stop() ──
-# CookieController uses a Streamlit component that runs in the parent window,
-# so document.cookie is set on the correct origin (unlike components.html iframes).
+# ─── Page Config — MUST be the first st.* call ───────────────────────────────────
+# We pick layout here based on session_state so we don't need a second call later.
+_user_is_logged_in = IS_LOCAL or ("user_email" in st.session_state)
+st.set_page_config(
+    page_title="DentAI – NSU College of Dental Medicine" if _user_is_logged_in else "DentAI – NSU Login",
+    page_icon="🦷",
+    layout="wide" if _user_is_logged_in else "centered",
+    initial_sidebar_state="expanded",
+)
+
+# ─── Cookie manager (cloud only) — must be AFTER set_page_config ─────────────────
+# extra-streamlit-components CookieManager uses a proper bidirectional Streamlit
+# component. It reads/writes cookies on the correct origin and survives page refreshes.
 if IS_CLOUD:
-    _cookie_ctrl = CookieController(key="dentai_cookie_ctrl")
+    from datetime import timedelta as _timedelta
+    _cookie_mgr = stx.CookieManager(key="dentai_cookie_mgr")
 
 # ─── Auto-restore session from cookie (survives page refresh) ────────────────────
-# On the FIRST render after a hard refresh, the cookie controller fires its JS,
-# sends the cookie value back, and triggers an automatic rerun.  On that second
-# render _cookie_rt is populated and we can restore the Supabase session silently.
+# CookieManager fires its JS on first render, reads all browser cookies, and sends
+# them back via Streamlit's component protocol — triggering a rerun.  On that second
+# render _cookie_rt is populated and we restore the Supabase session silently.
 if IS_CLOUD and "user_email" not in st.session_state:
-    _cookie_rt = _cookie_ctrl.get("dentai_rt") or ""
+    _cookie_rt = _cookie_mgr.get(cookie="dentai_rt") or ""
     if _cookie_rt:
         try:
             _sb = _get_supabase()
             _refreshed = _sb.auth.refresh_session(_cookie_rt)
             if _refreshed and _refreshed.user:
                 st.session_state.user_email = _refreshed.user.email
-                # Store the rotated token immediately
+                # Write the rotated refresh token back as a new cookie
                 if _refreshed.session and _refreshed.session.refresh_token:
-                    _cookie_ctrl.set(
+                    _cookie_mgr.set(
                         "dentai_rt",
                         _refreshed.session.refresh_token,
-                        max_age=2592000,
+                        expires_at=datetime.now() + _timedelta(days=30),
                     )
                 st.rerun()
         except Exception:
             # Cookie expired or revoked → clear it and show login
-            _cookie_ctrl.remove("dentai_rt")
+            _cookie_mgr.delete("dentai_rt")
 
 if IS_CLOUD and "user_email" not in st.session_state:
-    st.set_page_config(page_title="DentAI – NSU Login", page_icon="🦷", layout="centered")
-
     st.markdown("""
         <div style="text-align:center; padding:3rem 0 1.5rem;">
             <h1 style="font-size:2.5rem; margin-bottom:0.25rem;">🦷 Dent<span style="color:#2563eb;">AI</span></h1>
@@ -288,12 +297,24 @@ if IS_CLOUD and "user_email" not in st.session_state:
                             "type": "email",
                         })
                         st.session_state.user_email = resp.user.email
-                        # Write the refresh token as a 30-day cookie via CookieController
-                        _rt = (resp.session.refresh_token
-                               if resp.session and resp.session.refresh_token
-                               else None)
+                        # Get refresh token — try resp.session first, fall back to
+                        # sb.auth.get_session() in case the OTP flow doesn't inline it
+                        _rt = None
+                        if resp.session and resp.session.refresh_token:
+                            _rt = resp.session.refresh_token
+                        else:
+                            try:
+                                _s = sb.auth.get_session()
+                                if _s and _s.refresh_token:
+                                    _rt = _s.refresh_token
+                            except Exception:
+                                pass
                         if _rt:
-                            _cookie_ctrl.set("dentai_rt", _rt, max_age=2592000)
+                            _cookie_mgr.set(
+                                "dentai_rt",
+                                _rt,
+                                expires_at=datetime.now() + _timedelta(days=30),
+                            )
                         if "otp_sent_to" in st.session_state:
                             del st.session_state.otp_sent_to
                         st.rerun()
@@ -573,17 +594,8 @@ def get_logo_tag():
     # fallback: text badge
     return "<div class='nsu-text-badge'>NSU</div>"
 
-# ─── Page Config ────────────────────────────────────────────────────────────────
+# ─── Language shortcut ───────────────────────────────────────────────────────────
 _t = _UI[st.session_state.lang]   # shortcut to current-language strings
-
-st.set_page_config(
-    page_title=_t["page_title"],
-    page_icon="🦷",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-
 
 # ─── CSS: Animations + NSU Brand ────────────────────────────────────────────────
 st.markdown("""
@@ -2416,9 +2428,9 @@ with st.sidebar:
             )
         if st.button("🚪 Sign Out", use_container_width=True, type="primary",
                      key="logout_btn"):
-            # Remove the auth cookie via CookieController, then wipe session
+            # Remove the auth cookie, then wipe session
             if IS_CLOUD:
-                _cookie_ctrl.remove("dentai_rt")
+                _cookie_mgr.delete("dentai_rt")
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
             st.rerun()
