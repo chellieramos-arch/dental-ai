@@ -377,8 +377,8 @@ _UI = {
             ("2", "Run <code>python ingest.py</code> to index them"),
             ("3", "Restart the app — new materials will be searchable"),
         ],
-        "sb_footer":        ("Nova Southeastern University<br><strong>College of Dental Medicine</strong><br>"
-                             "Powered by DentAI"),
+        "sb_footer":        ("Nova Southeastern University<br>College of Dental Medicine<br>"
+                             "<span style='color:#FDB913;font-weight:600;'>Powered by DentAI</span>"),
         "lang_label":       "🌐 Language / Idioma",
         "you_asked":        "You asked",
         "lang_toggle":      "Español 🇪🇸",
