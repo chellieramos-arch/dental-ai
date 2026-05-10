@@ -2141,17 +2141,6 @@ components.html("""
 def render_response(assistant_text, sources, images):
     """Render one assistant turn: response card + optional image panel + sources."""
     t = _UI[st.session_state.lang]
-    st.markdown(
-        "<div class='response-wrapper'>"
-        "<div class='response-card'>"
-        "<div class='response-header'>"
-        f"<span class='response-badge'>{t['badge']}</span>"
-        f"<p class='response-title'>{t['response_title']}</p>"
-        "</div>"
-        "</div>"
-        "</div>",
-        unsafe_allow_html=True
-    )
     if images:
         col_text, col_imgs = st.columns([3, 1.4], gap="medium")
         with col_text:
