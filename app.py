@@ -1546,27 +1546,30 @@ section[data-testid="stSidebar"] code {
     pointer-events: none;
 }
 
-/* Scrollable session list container */
+/* Scrollable session list container — NSU themed box */
 section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
-    background: transparent !important;
-    border: none !important;
+    background: rgba(0,20,70,0.35) !important;
+    border: 1px solid rgba(253,185,19,0.25) !important;
+    border-radius: 10px !important;
+    padding: 4px 0 !important;
 }
-section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+/* Scrollbar inside the session container */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] * {
     scrollbar-width: thin;
     scrollbar-color: rgba(253,185,19,0.4) transparent;
 }
-section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar {
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] ::-webkit-scrollbar {
     width: 4px;
 }
-section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-track {
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] ::-webkit-scrollbar-track {
     background: transparent;
 }
-section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb {
-    background: rgba(253,185,19,0.4);
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] ::-webkit-scrollbar-thumb {
+    background: rgba(253,185,19,0.45);
     border-radius: 2px;
 }
-section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb:hover {
-    background: rgba(253,185,19,0.7);
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] ::-webkit-scrollbar-thumb:hover {
+    background: rgba(253,185,19,0.75);
 }
 
 /* Popover dropdown panel */
@@ -2279,7 +2282,7 @@ with st.sidebar:
             unsafe_allow_html=True
         )
         # Scrollable session list
-        with st.container(height=320, border=False):
+        with st.container(height=280, border=True):
             for sess in reversed(_all_sessions):
                 is_active   = sess["id"] == st.session_state.current_session_id
                 is_renaming = st.session_state.get("_renaming_id") == sess["id"]
