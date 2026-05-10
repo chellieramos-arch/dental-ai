@@ -1689,8 +1689,8 @@ section[data-testid="stSidebar"] .sess-del-wrap .stButton > button:hover {
    LANGUAGE TOGGLE
 ══════════════════════════════════════ */
 
-/* All buttons inside the sidebar get the gold pill style */
-section[data-testid="stSidebar"] .stButton > button {
+/* Primary buttons in sidebar → gold pill (New Chat, language toggle) */
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
     background: rgba(253,185,19,0.15) !important;
     color: #FDB913 !important;
     border: 1px solid rgba(253,185,19,0.45) !important;
@@ -1699,21 +1699,47 @@ section[data-testid="stSidebar"] .stButton > button {
     font-size: 0.85rem !important;
     font-weight: 700 !important;
     letter-spacing: 0.3px !important;
-    width: auto !important;
-    min-width: unset !important;
     animation: none !important;
-    transition: background 0.18s, border-color 0.18s !important;
     box-shadow: none !important;
 }
-section[data-testid="stSidebar"] .stButton > button p,
-section[data-testid="stSidebar"] .stButton > button span {
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] p,
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"] span {
     color: #FDB913 !important;
     font-weight: 700 !important;
-    font-size: 0.85rem !important;
 }
-section[data-testid="stSidebar"] .stButton > button:hover {
+section[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover {
     background: rgba(253,185,19,0.28) !important;
     border-color: rgba(253,185,19,0.7) !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Secondary buttons in sidebar → plain text (session load, save, cancel) */
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {
+    background: transparent !important;
+    color: rgba(255,255,255,0.82) !important;
+    border: none !important;
+    border-radius: 4px !important;
+    padding: 5px 8px !important;
+    font-size: 0.82rem !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+    text-align: left !important;
+    animation: none !important;
+    box-shadow: none !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] p,
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] span {
+    color: rgba(255,255,255,0.82) !important;
+    font-weight: 400 !important;
+    font-size: 0.82rem !important;
+}
+section[data-testid="stSidebar"] [data-testid="baseButton-secondary"]:hover {
+    background: rgba(255,255,255,0.08) !important;
+    color: #ffffff !important;
     transform: none !important;
     box-shadow: none !important;
 }
@@ -2205,12 +2231,12 @@ if case_input:
 with st.sidebar:
     # ── Language toggle (top of sidebar) ────────────────────────────────────────
     st.markdown(f"<span class='lang-label'>{_t['lang_label']}</span>", unsafe_allow_html=True)
-    if st.button(_t["lang_toggle"]):
+    if st.button(_t["lang_toggle"], type="primary"):
         st.session_state.lang = "es" if st.session_state.lang == "en" else "en"
         st.rerun()
 
     st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
-    if st.button(_t["btn_new_chat"]):
+    if st.button(_t["btn_new_chat"], type="primary"):
         st.session_state.current_session_id = new_session_id()
         st.session_state.chat_history       = []
         st.session_state.latest_images      = []
@@ -2267,16 +2293,15 @@ with st.sidebar:
                         unsafe_allow_html=True
                     )
                 else:
-                    _sid = sess['id']
-                    _safe_title = _title_short.replace("'", "&#39;").replace('"', "&quot;")
-                    st.markdown(
-                        f"<div class='sess-row' "
-                        f"onclick=\"(function(){{var u=new URL(window.location);"
-                        f"u.searchParams.set('load_sess','{_sid}');"
-                        f"window.location=u;}})()\">"
-                        f"<span class='sess-label'>{_safe_title}</span></div>",
-                        unsafe_allow_html=True
-                    )
+                    if st.button(
+                        _title_short,
+                        key=f"load_{sess['id']}",
+                        use_container_width=True,
+                    ):
+                        st.session_state.current_session_id = sess["id"]
+                        st.session_state.chat_history       = load_session(sess["id"])
+                        st.session_state.latest_images      = []
+                        st.rerun()
 
             with col_menu:
                 with st.popover("⋮", use_container_width=True):
