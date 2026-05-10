@@ -1653,19 +1653,28 @@ section[data-testid="stSidebar"] [data-testid="stPopover"] button {
     border: 1px solid rgba(253,185,19,0.3) !important;
     border-radius: 6px !important;
     color: #FDB913 !important;
-    font-size: 1rem !important;
+    font-size: 1.1rem !important;
     font-weight: 700 !important;
-    padding: 2px 6px !important;
-    min-height: 28px !important;
-    height: 28px !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
     box-shadow: none !important;
     animation: none !important;
+    overflow: hidden !important;
 }
 section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
     background: rgba(253,185,19,0.15) !important;
     border-color: rgba(253,185,19,0.6) !important;
     transform: none !important;
     box-shadow: none !important;
+}
+/* Hide the auto-added chevron — ⋮ alone is enough */
+section[data-testid="stSidebar"] [data-testid="stPopover"] button svg {
+    display: none !important;
 }
 
 /* Edit + Delete buttons — small ghost (high-specificity to override sidebar globals) */
