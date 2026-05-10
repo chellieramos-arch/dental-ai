@@ -268,6 +268,16 @@ if IS_CLOUD and "user_email" not in st.session_state:
 
     st.stop()
 
+# ─── Handle session-load query param (from sidebar HTML links) ───────────────────
+if "load_sess" in st.query_params:
+    _load_id = st.query_params.get("load_sess", "")
+    st.query_params.clear()
+    if _load_id:
+        st.session_state.current_session_id = _load_id
+        st.session_state.chat_history       = load_session(_load_id)
+        st.session_state.latest_images      = []
+        st.rerun()
+
 # ─── Session State ────────────────────────────────────────────────────────────────
 if "current_session_id" not in st.session_state:
     # Resume the most recent session automatically on first load
@@ -1513,40 +1523,27 @@ section[data-testid="stSidebar"] code {
     text-overflow: ellipsis;
 }
 
-/* Session list button — plain text, no border, no pill */
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 4px !important;
-    padding: 5px 8px !important;
-    text-align: left !important;
-    width: 100% !important;
-    color: rgba(255,255,255,0.80) !important;
-    font-size: 0.82rem !important;
-    font-weight: 400 !important;
-    animation: none !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    line-height: 1.3 !important;
-    height: auto !important;
-    min-height: unset !important;
-    box-shadow: none !important;
-    margin-bottom: 0 !important;
-    letter-spacing: 0 !important;
+/* Inactive session row — pure HTML div, no Streamlit button */
+.sess-row {
+    cursor: pointer;
+    padding: 5px 8px;
+    border-radius: 4px;
+    color: rgba(255,255,255,0.82);
+    font-size: 0.82rem;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.4;
+    transition: background 0.15s;
+    user-select: none;
 }
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button:hover {
-    background: rgba(255,255,255,0.08) !important;
-    border: none !important;
-    color: #ffffff !important;
-    transform: none !important;
-    box-shadow: none !important;
+.sess-row:hover {
+    background: rgba(255,255,255,0.08);
+    color: #ffffff;
 }
-.sess-btn-wrap .stButton > button p {
-    color: rgba(255,255,255,0.92) !important;
-    font-size: 0.82rem !important;
-    white-space: pre-line !important;
-    text-align: left !important;
+.sess-label {
+    pointer-events: none;
 }
 
 /* Popover dropdown panel */
@@ -1691,39 +1688,6 @@ section[data-testid="stSidebar"] .sess-del-wrap .stButton > button:hover {
 /* ══════════════════════════════════════
    LANGUAGE TOGGLE
 ══════════════════════════════════════ */
-
-/* Session list buttons — two-class selector beats global one-class rule */
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button {
-    background: transparent !important;
-    border: none !important;
-    border-radius: 4px !important;
-    padding: 5px 8px !important;
-    color: rgba(255,255,255,0.80) !important;
-    font-size: 0.82rem !important;
-    font-weight: 400 !important;
-    letter-spacing: 0 !important;
-    text-align: left !important;
-    width: 100% !important;
-    box-shadow: none !important;
-    animation: none !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
-    min-height: unset !important;
-    height: auto !important;
-}
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button:hover {
-    background: rgba(255,255,255,0.08) !important;
-    border: none !important;
-    color: #ffffff !important;
-    transform: none !important;
-    box-shadow: none !important;
-}
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button p,
-section[data-testid="stSidebar"] .sess-btn-wrap .stButton > button span {
-    color: rgba(255,255,255,0.80) !important;
-    font-weight: 400 !important;
-}
 
 /* All buttons inside the sidebar get the gold pill style */
 section[data-testid="stSidebar"] .stButton > button {
@@ -2303,17 +2267,16 @@ with st.sidebar:
                         unsafe_allow_html=True
                     )
                 else:
-                    st.markdown("<div class='sess-btn-wrap'>", unsafe_allow_html=True)
-                    if st.button(
-                        _title_short,
-                        key=f"load_{sess['id']}",
-                        use_container_width=True
-                    ):
-                        st.session_state.current_session_id = sess["id"]
-                        st.session_state.chat_history       = load_session(sess["id"])
-                        st.session_state.latest_images      = []
-                        st.rerun()
-                    st.markdown("</div>", unsafe_allow_html=True)
+                    _sid = sess['id']
+                    _safe_title = _title_short.replace("'", "&#39;").replace('"', "&quot;")
+                    st.markdown(
+                        f"<div class='sess-row' "
+                        f"onclick=\"(function(){{var u=new URL(window.parent.location);"
+                        f"u.searchParams.set('load_sess','{_sid}');"
+                        f"window.parent.location=u;}})()\">"
+                        f"<span class='sess-label'>{_safe_title}</span></div>",
+                        unsafe_allow_html=True
+                    )
 
             with col_menu:
                 with st.popover("⋮", use_container_width=True):
@@ -2327,42 +2290,6 @@ with st.sidebar:
                             st.session_state.latest_images      = []
                         delete_session(sess["id"])
                         st.rerun()
-
-    # ── JS: strip pill styling from session load buttons ─────────────────────────
-    _skip = {"Español 🇪🇸", "English 🇺🇸", "🔄 New Chat", "🔄 Nueva Consulta",
-             "⋮", "Save", "Cancel", "✏️  Rename", "🗑  Delete"}
-    _session_titles = [s.get("title","")[:44] for s in _all_sessions]
-    _titles_js = str(_session_titles).replace("'", "\\'")
-    components.html(f"""<script>
-    (function() {{
-        var titles = {_titles_js};
-        function fix() {{
-            var sidebar = window.parent.document.querySelector('[data-testid="stSidebar"]');
-            if (!sidebar) return;
-            sidebar.querySelectorAll('.stButton > button').forEach(function(btn) {{
-                var t = btn.innerText.trim();
-                for (var i = 0; i < titles.length; i++) {{
-                    if (t === titles[i] || t.startsWith(titles[i])) {{
-                        btn.style.setProperty('background','transparent','important');
-                        btn.style.setProperty('border','none','important');
-                        btn.style.setProperty('border-radius','4px','important');
-                        btn.style.setProperty('color','rgba(255,255,255,0.82)','important');
-                        btn.style.setProperty('font-weight','400','important');
-                        btn.style.setProperty('font-size','0.82rem','important');
-                        btn.style.setProperty('text-align','left','important');
-                        btn.style.setProperty('letter-spacing','0','important');
-                        btn.style.setProperty('box-shadow','none','important');
-                        btn.style.setProperty('padding','5px 8px','important');
-                        btn.style.setProperty('width','100%','important');
-                        btn.style.setProperty('animation','none','important');
-                        break;
-                    }}
-                }}
-            }});
-        }}
-        fix(); setTimeout(fix,200); setTimeout(fix,600);
-    }})();
-    </script>""", height=0)
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
