@@ -1652,19 +1652,14 @@ section[data-testid="stSidebar"] [data-testid="stPopover"] button {
     background: rgba(255,255,255,0.08) !important;
     border: 1px solid rgba(253,185,19,0.3) !important;
     border-radius: 6px !important;
-    color: #FDB913 !important;
-    font-size: 1.1rem !important;
-    font-weight: 700 !important;
     padding: 0 !important;
     width: 100% !important;
     height: 32px !important;
     min-height: 32px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
     box-shadow: none !important;
     animation: none !important;
     overflow: hidden !important;
+    position: relative !important;
 }
 section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
     background: rgba(253,185,19,0.15) !important;
@@ -1672,9 +1667,23 @@ section[data-testid="stSidebar"] [data-testid="stPopover"] button:hover {
     transform: none !important;
     box-shadow: none !important;
 }
-/* Hide the auto-added chevron — ⋮ alone is enough */
-section[data-testid="stSidebar"] [data-testid="stPopover"] button svg {
+/* Hide all auto-rendered children (label + chevron) */
+section[data-testid="stSidebar"] [data-testid="stPopover"] button > * {
     display: none !important;
+}
+/* Inject ⋮ via pseudo-element so only one symbol shows */
+section[data-testid="stSidebar"] [data-testid="stPopover"] button::after {
+    content: "⋮";
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+    height: 100% !important;
+    color: #FDB913 !important;
+    font-size: 1.2rem !important;
+    font-weight: 700 !important;
+    position: absolute !important;
+    top: 0; left: 0;
 }
 
 /* Edit + Delete buttons — small ghost (high-specificity to override sidebar globals) */
