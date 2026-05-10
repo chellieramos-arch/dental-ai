@@ -2412,6 +2412,26 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
+    # ── Logout (cloud only) ──────────────────────────────────────────────────────
+    if IS_CLOUD:
+        _user_display = st.session_state.get("user_email", "")
+        if _user_display:
+            st.markdown(
+                f"<p style='color:rgba(255,255,255,0.45);font-size:0.72rem;"
+                f"text-align:center;margin:12px 0 4px;'>{_user_display}</p>",
+                unsafe_allow_html=True,
+            )
+        if st.button("🚪 Sign Out", use_container_width=True, type="primary",
+                     key="logout_btn"):
+            # Clear localStorage token then wipe session
+            components.html(
+                "<script>try{localStorage.removeItem('dentai_rt')}catch(e){}</script>",
+                height=0,
+            )
+            for _k in list(st.session_state.keys()):
+                del st.session_state[_k]
+            st.rerun()
+
     st.markdown(
         f"<div class='sb-footer'><p>{_t['sb_footer']}</p></div>",
         unsafe_allow_html=True
