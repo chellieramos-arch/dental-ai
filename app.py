@@ -198,8 +198,43 @@ _NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
 def _is_nsu_email(email: str) -> bool:
     return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
 
+# ─── Auto-restore session from stored refresh token (survives page refresh) ──────
+if IS_CLOUD and "user_email" not in st.session_state and "dentai_rt" in st.query_params:
+    _rt = st.query_params.get("dentai_rt", "")
+    st.query_params.clear()
+    if _rt:
+        try:
+            _sb = _get_supabase()
+            _refreshed = _sb.auth.refresh_session(_rt)
+            if _refreshed and _refreshed.user:
+                st.session_state.user_email = _refreshed.user.email
+                # Persist the rotated refresh token for the next refresh
+                if _refreshed.session and _refreshed.session.refresh_token:
+                    st.session_state._store_rt = _refreshed.session.refresh_token
+                st.rerun()
+        except Exception:
+            pass  # Token expired or invalid → fall through to login gate
+
 if IS_CLOUD and "user_email" not in st.session_state:
     st.set_page_config(page_title="DentAI – NSU Login", page_icon="🦷", layout="centered")
+
+    # ── Try to restore from localStorage before showing the form ─────────────
+    # JS reads the stored refresh token and passes it as a query param so Python
+    # can validate it via Supabase without the user seeing the login form.
+    components.html("""<script>
+    (function() {
+        try {
+            var rt = localStorage.getItem('dentai_rt');
+            if (rt) {
+                var u = new URL(window.parent.location.href);
+                if (!u.searchParams.has('dentai_rt')) {
+                    u.searchParams.set('dentai_rt', rt);
+                    window.parent.location.replace(u.toString());
+                }
+            }
+        } catch(e) {}
+    })();
+    </script>""", height=0)
 
     st.markdown("""
         <div style="text-align:center; padding:3rem 0 1.5rem;">
@@ -257,6 +292,9 @@ if IS_CLOUD and "user_email" not in st.session_state:
                             "type": "email",
                         })
                         st.session_state.user_email = resp.user.email
+                        # Persist refresh token so page refresh doesn't log out
+                        if resp.session and resp.session.refresh_token:
+                            st.session_state._store_rt = resp.session.refresh_token
                         if "otp_sent_to" in st.session_state:
                             del st.session_state.otp_sent_to
                         st.rerun()
@@ -267,6 +305,15 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 st.rerun()
 
     st.stop()
+
+# ─── Write pending refresh token to browser localStorage (runs after login) ──────
+if IS_CLOUD and "_store_rt" in st.session_state:
+    _rt_val = st.session_state.pop("_store_rt")
+    if _rt_val:
+        components.html(
+            f"<script>try{{localStorage.setItem('dentai_rt',{repr(_rt_val)})}}catch(e){{}}</script>",
+            height=0,
+        )
 
 # ─── Handle session-load query param (from sidebar HTML links) ───────────────────
 if "load_sess" in st.query_params:
