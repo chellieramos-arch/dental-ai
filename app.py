@@ -2414,15 +2414,6 @@ with st.sidebar:
             unsafe_allow_html=True
         )
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-
-    # ── Add materials ────────────────────────────────────────────────────────────
-    st.markdown(f"## {_t['sidebar_add']}")
-    for num, text in _t["add_steps"]:
-        st.markdown(
-            f"<div class='sb-step'><div class='sb-num'>{num}</div><div class='sb-text'>{text}</div></div>",
-            unsafe_allow_html=True
-        )
 
     # ── Logout (cloud only) ──────────────────────────────────────────────────────
     if IS_CLOUD:
