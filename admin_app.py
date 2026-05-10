@@ -39,35 +39,47 @@ st.set_page_config(
 # ── Global styles ─────────────────────────────────────────────────────────────
 st.markdown("""
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+  :root {
+    --bg: #050a12;
+    --surface: #0c1524;
+    --surface2: #111e30;
+    --border: rgba(0,200,255,0.12);
+    --cyan: #00c8ff;
+    --purple: #7b5ea7;
+    --text: #e8f0fe;
+    --muted: #7a90b0;
+  }
+
   /* ── Base ── */
-  [data-testid="stAppViewContainer"] {
-    background: #f4f6f9;
+  [data-testid="stAppViewContainer"], .main {
+    background: var(--bg) !important;
+    font-family: 'Inter', sans-serif;
   }
   [data-testid="stHeader"] { background: transparent; display: none; }
   #MainMenu, footer { visibility: hidden; }
+  * { color: var(--text); }
 
   /* ── Sidebar ── */
   [data-testid="stSidebar"] {
-    background: #0f1117 !important;
-    border-right: none;
-  }
-  [data-testid="stSidebar"] * {
-    color: #c9cdd6 !important;
+    background: #030810 !important;
+    border-right: 1px solid var(--border) !important;
   }
   [data-testid="stSidebar"] .sidebar-logo {
     padding: 28px 20px 20px;
-    border-bottom: 1px solid #1e2130;
+    border-bottom: 1px solid var(--border);
     margin-bottom: 8px;
   }
   [data-testid="stSidebar"] hr {
-    border-color: #1e2130 !important;
+    border-color: var(--border) !important;
   }
 
   /* ── Nav buttons in sidebar ── */
   [data-testid="stSidebar"] .stButton > button {
     background: transparent !important;
     border: none !important;
-    color: #8b91a1 !important;
+    color: var(--muted) !important;
     text-align: left !important;
     width: 100% !important;
     padding: 10px 16px !important;
@@ -78,40 +90,42 @@ st.markdown("""
     margin-bottom: 2px !important;
   }
   [data-testid="stSidebar"] .stButton > button:hover {
-    background: #1e2130 !important;
-    color: #ffffff !important;
+    background: rgba(0,200,255,0.08) !important;
+    color: var(--cyan) !important;
   }
   [data-testid="stSidebar"] .nav-active > button {
-    background: #1e2130 !important;
-    color: #ffffff !important;
+    background: rgba(0,200,255,0.10) !important;
+    color: var(--cyan) !important;
+    border-left: 2px solid var(--cyan) !important;
   }
 
   /* ── Cards ── */
   .card {
-    background: #ffffff;
-    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
     padding: 28px 32px;
     margin-bottom: 20px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   }
   .card h4 {
     margin: 0 0 4px 0;
     font-size: 1rem;
-    font-weight: 600;
-    color: #111827;
+    font-weight: 700;
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
   }
   .card-caption {
     font-size: 0.82rem;
-    color: #6b7280;
+    color: var(--muted);
     margin-bottom: 16px;
   }
 
   /* ── Stat cards ── */
   .stat-card {
-    background: #ffffff;
-    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
     padding: 22px 24px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     display: flex;
     align-items: center;
     gap: 16px;
@@ -126,17 +140,17 @@ st.markdown("""
     letter-spacing: 0.03em;
     text-transform: uppercase;
   }
-  .stat-icon.blue   { background: #eff6ff; color: #1d4ed8; }
-  .stat-icon.green  { background: #f0fdf4; color: #15803d; }
-  .stat-icon.purple { background: #faf5ff; color: #7c3aed; }
-  .stat-num { font-size: 1.8rem; font-weight: 700; color: #111827; line-height: 1; }
-  .stat-lbl { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }
+  .stat-icon.blue   { background: rgba(0,200,255,0.12); color: var(--cyan); }
+  .stat-icon.green  { background: rgba(0,200,100,0.12); color: #00c851; }
+  .stat-icon.purple { background: rgba(123,94,167,0.18); color: #a78bfa; }
+  .stat-num { font-size: 1.8rem; font-weight: 700; color: var(--text); line-height: 1; font-family: 'Space Grotesk', sans-serif; }
+  .stat-lbl { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 
   /* ── Source rows ── */
   .src-item {
     display: flex; align-items: center; gap: 12px;
     padding: 11px 0;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--border);
   }
   .src-item:last-child { border-bottom: none; }
   .file-type-badge {
@@ -147,53 +161,76 @@ st.markdown("""
     letter-spacing: 0.04em; flex-shrink: 0;
     text-transform: uppercase;
   }
-  .file-type-badge.pdf  { background: #fee2e2; color: #b91c1c; }
-  .file-type-badge.doc  { background: #dbeafe; color: #1d4ed8; }
-  .file-type-badge.ppt  { background: #ffedd5; color: #c2410c; }
-  .file-type-badge.web  { background: #f0fdf4; color: #15803d; }
-  .file-type-badge.txt  { background: #f3f4f6; color: #374151; }
-  .src-name { font-size: 0.88rem; color: #111827; font-weight: 500; flex: 1; }
-  .src-date { font-size: 0.75rem; color: #9ca3af; }
+  .file-type-badge.pdf  { background: rgba(239,68,68,0.15); color: #f87171; }
+  .file-type-badge.doc  { background: rgba(0,200,255,0.12); color: var(--cyan); }
+  .file-type-badge.ppt  { background: rgba(251,146,60,0.15); color: #fb923c; }
+  .file-type-badge.web  { background: rgba(0,200,100,0.12); color: #00c851; }
+  .file-type-badge.txt  { background: rgba(255,255,255,0.06); color: var(--muted); }
+  .src-name { font-size: 0.88rem; color: var(--text); font-weight: 500; flex: 1; }
+  .src-date { font-size: 0.75rem; color: var(--muted); }
 
   /* ── Page title ── */
   .page-title {
-    font-size: 1.35rem; font-weight: 700; color: #111827;
-    margin-bottom: 2px;
+    font-size: 1.5rem; font-weight: 700; color: var(--text);
+    margin-bottom: 2px; font-family: 'Space Grotesk', sans-serif;
   }
   .page-sub {
-    font-size: 0.85rem; color: #6b7280;
+    font-size: 0.85rem; color: var(--muted);
     margin-bottom: 24px;
   }
 
-  /* ── Upload area ── */
+  /* ── Inputs ── */
   [data-testid="stFileUploader"] {
-    border: 1.5px dashed #d1d5db !important;
+    border: 1.5px dashed rgba(0,200,255,0.25) !important;
     border-radius: 10px !important;
-    background: #fafafa !important;
+    background: rgba(0,200,255,0.03) !important;
     padding: 8px !important;
+  }
+  [data-testid="stTextInput"] input,
+  [data-testid="stTextArea"] textarea {
+    background: var(--bg) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 8px !important;
+    color: var(--text) !important;
+  }
+  [data-testid="stTextInput"] input:focus,
+  [data-testid="stTextArea"] textarea:focus {
+    border-color: var(--cyan) !important;
+    box-shadow: 0 0 0 3px rgba(0,200,255,0.08) !important;
   }
 
   /* ── Primary button ── */
   .stButton > button[kind="primary"] {
-    background: #111827 !important;
-    color: #ffffff !important;
+    background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
+    color: #000 !important;
     border: none !important;
     border-radius: 8px !important;
-    font-weight: 600 !important;
+    font-weight: 700 !important;
     padding: 10px 20px !important;
   }
   .stButton > button[kind="primary"]:hover {
-    background: #1f2937 !important;
+    box-shadow: 0 4px 20px rgba(0,200,255,0.35) !important;
+    transform: translateY(-1px) !important;
+  }
+  .stButton > button[kind="secondary"] {
+    background: transparent !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text) !important;
+    border-radius: 8px !important;
+  }
+  .stButton > button[kind="secondary"]:hover {
+    border-color: var(--cyan) !important;
+    color: var(--cyan) !important;
   }
 
   /* ── Login ── */
   .login-container {
     max-width: 400px;
     margin: 60px auto;
-    background: #ffffff;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 16px;
     padding: 44px 40px;
-    box-shadow: 0 4px 32px rgba(0,0,0,0.10);
     text-align: center;
   }
 
@@ -204,8 +241,9 @@ st.markdown("""
     border-radius: 999px;
     font-size: 0.72rem;
     font-weight: 600;
-    background: #f0fdf4;
-    color: #16a34a;
+    background: rgba(0,200,100,0.12);
+    color: #00c851;
+    border: 1px solid rgba(0,200,100,0.2);
   }
 
   /* ── Scrollable list ── */
@@ -216,7 +254,12 @@ st.markdown("""
   }
   .scroll-list::-webkit-scrollbar { width: 4px; }
   .scroll-list::-webkit-scrollbar-track { background: transparent; }
-  .scroll-list::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 4px; }
+  .scroll-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* ── Streamlit overrides ── */
+  .stAlert { border-radius: 10px !important; }
+  [data-testid="stMarkdownContainer"] p { color: var(--muted); }
+  .stProgress > div > div { background: var(--cyan) !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -356,12 +399,12 @@ def show_login():
     with col:
         st.markdown("""
         <div class="login-container">
-          <div style="width:52px;height:52px;background:#111827;border-radius:12px;
-                      margin:0 auto 16px;display:flex;align-items:center;justify-content:center;">
-            <div style="width:22px;height:22px;border:2.5px solid #ffffff;border-radius:50%;"></div>
-          </div>
-          <div style="font-size:1.3rem;font-weight:700;color:#111827;">DentAI Admin</div>
-          <div style="font-size:0.85rem;color:#6b7280;margin-top:4px;margin-bottom:28px;">
+          <div style="width:56px;height:56px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+                      border-radius:14px;margin:0 auto 18px;display:flex;align-items:center;
+                      justify-content:center;font-family:'Space Grotesk',sans-serif;
+                      font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">DentAI Admin</div>
+          <div style="font-size:0.85rem;color:#7a90b0;margin-top:6px;margin-bottom:28px;">
             NSU College of Dental Medicine
           </div>
         </div>
@@ -392,11 +435,16 @@ def show_sidebar():
     with st.sidebar:
         st.markdown("""
         <div class="sidebar-logo">
-          <div style="font-size:1.05rem;font-weight:700;color:#ffffff;letter-spacing:0.3px;">
-            DentAI
-          </div>
-          <div style="font-size:0.75rem;color:#4b5563;margin-top:3px;">
-            Faculty Dashboard
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:32px;height:32px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+                        border-radius:8px;display:flex;align-items:center;justify-content:center;
+                        font-size:14px;font-weight:900;color:#fff;font-family:'Space Grotesk',sans-serif;">D+</div>
+            <div>
+              <div style="font-size:1rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">
+                Dent<span style="color:#00c8ff;">AI</span> Assist
+              </div>
+              <div style="font-size:0.72rem;color:#7a90b0;margin-top:1px;">Faculty Dashboard</div>
+            </div>
           </div>
         </div>
         """, unsafe_allow_html=True)
