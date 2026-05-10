@@ -1007,12 +1007,19 @@ header    { visibility: hidden; }
     background: rgba(255,255,255,0.12);
     border-color: rgba(253,185,19,0.35);
 }
+.stat-chip-lg {
+    padding: 18px 32px !important;
+    border-radius: 14px !important;
+}
 .stat-num {
     color: #FDB913 !important;
     font-size: 1.3rem;
     font-weight: 700;
     display: block;
     line-height: 1;
+}
+.stat-num-lg {
+    font-size: 2.4rem !important;
 }
 .stat-label {
     color: rgba(255,255,255,0.85) !important;
@@ -1022,6 +1029,11 @@ header    { visibility: hidden; }
     text-transform: uppercase;
     display: block;
     margin-top: 3px;
+}
+.stat-label-lg {
+    font-size: 0.9rem !important;
+    letter-spacing: 1px !important;
+    margin-top: 6px !important;
 }
 
 /* ══════════════════════════════════════
@@ -2097,8 +2109,7 @@ st.markdown(
     f"<p class='hero-sub'>{_t['hero_sub']}</p>"
     "</div>"
     "<div class='hero-stats'>"
-    "<div class='stat-chip'><span class='stat-num'>🦷</span><span class='stat-label'>DentAI</span></div>"
-    "<div class='stat-chip'><span class='stat-num'>NSU</span><span class='stat-label'>CDM</span></div>"
+    "<div class='stat-chip stat-chip-lg'><span class='stat-num stat-num-lg'>🦷</span><span class='stat-label stat-label-lg'>DentAI</span></div>"
     "</div>"
     "</div>"
     "<div class='hero-wave'>"
