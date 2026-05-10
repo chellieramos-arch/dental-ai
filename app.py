@@ -2203,12 +2203,6 @@ if _has_history:
         imgs = st.session_state.latest_images if i == len(st.session_state.chat_history) - 1 else []
         render_response(exchange["assistant"], exchange["sources"], imgs)
 
-    # Scroll the page to the bottom so the latest reply is visible
-    components.html("""
-    <script>
-    window.parent.scrollTo({top: window.parent.document.body.scrollHeight, behavior: 'smooth'});
-    </script>
-    """, height=0)
 
 # ─── Fixed-bottom chat input (native Streamlit) ───────────────────────────────────
 _placeholder = _t["placeholder_followup"] if _has_history else _t["placeholder_new"]
