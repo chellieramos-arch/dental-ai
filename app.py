@@ -1689,33 +1689,8 @@ section[data-testid="stSidebar"] .sess-del-wrap .stButton > button:hover {
    LANGUAGE TOGGLE
 ══════════════════════════════════════ */
 
-/* Primary buttons in sidebar → gold pill (New Chat, language toggle) */
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] {
-    background: rgba(253,185,19,0.15) !important;
-    color: #FDB913 !important;
-    border: 1px solid rgba(253,185,19,0.45) !important;
-    border-radius: 20px !important;
-    padding: 7px 20px !important;
-    font-size: 0.85rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.3px !important;
-    animation: none !important;
-    box-shadow: none !important;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] p,
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"] span {
-    color: #FDB913 !important;
-    font-weight: 700 !important;
-}
-section[data-testid="stSidebar"] [data-testid="baseButton-primary"]:hover {
-    background: rgba(253,185,19,0.28) !important;
-    border-color: rgba(253,185,19,0.7) !important;
-    transform: none !important;
-    box-shadow: none !important;
-}
-
-/* Secondary buttons in sidebar → plain text (session load, save, cancel) */
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {
+/* ALL sidebar buttons → base: plain text, no pill (covers session buttons) */
+section[data-testid="stSidebar"] .stButton > button {
     background: transparent !important;
     color: rgba(255,255,255,0.82) !important;
     border: none !important;
@@ -1731,15 +1706,44 @@ section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] {
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] p,
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"] span {
+section[data-testid="stSidebar"] .stButton > button p,
+section[data-testid="stSidebar"] .stButton > button span {
     color: rgba(255,255,255,0.82) !important;
     font-weight: 400 !important;
     font-size: 0.82rem !important;
 }
-section[data-testid="stSidebar"] [data-testid="baseButton-secondary"]:hover {
+section[data-testid="stSidebar"] .stButton > button:hover {
     background: rgba(255,255,255,0.08) !important;
     color: #ffffff !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Primary buttons override → gold pill (New Chat, language toggle)
+   More specific selector wins: .stButton > button[attr] beats .stButton > button */
+section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] {
+    background: rgba(253,185,19,0.15) !important;
+    color: #FDB913 !important;
+    border: 1px solid rgba(253,185,19,0.45) !important;
+    border-radius: 20px !important;
+    padding: 7px 20px !important;
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.3px !important;
+    text-align: center !important;
+    white-space: normal !important;
+    overflow: visible !important;
+}
+section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] p,
+section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] span {
+    color: #FDB913 !important;
+    font-weight: 700 !important;
+    font-size: 0.85rem !important;
+}
+section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"]:hover {
+    background: rgba(253,185,19,0.28) !important;
+    border-color: rgba(253,185,19,0.7) !important;
+    color: #FDB913 !important;
     transform: none !important;
     box-shadow: none !important;
 }
