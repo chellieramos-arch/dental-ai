@@ -21,5 +21,8 @@ pinecone>=5.0.0
 # ── Supabase (per-student chat history) ───────────────────────────────────────
 supabase>=2.0.0
 
+# ── Cookie management (persistent login across page refreshes) ─────────────────
+streamlit-cookies-controller>=0.3.0
+
 # ── PDF rendering ─────────────────────────────────────────────────────────────
 PyMuPDF>=1.24.0

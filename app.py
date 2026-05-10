@@ -30,6 +30,7 @@ if IS_LOCAL:
 if IS_CLOUD:
     from pinecone import Pinecone as PineconeClient
     from supabase import create_client as create_supabase_client
+    from streamlit_cookies_controller import CookieController
 
 try:
     import fitz  # PyMuPDF
@@ -198,21 +199,35 @@ _NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
 def _is_nsu_email(email: str) -> bool:
     return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
 
+# ─── Cookie controller (cloud only) — must be instantiated before any st.stop() ──
+# CookieController uses a Streamlit component that runs in the parent window,
+# so document.cookie is set on the correct origin (unlike components.html iframes).
+if IS_CLOUD:
+    _cookie_ctrl = CookieController(key="dentai_cookie_ctrl")
+
 # ─── Auto-restore session from cookie (survives page refresh) ────────────────────
-# st.context.cookies is read server-side — no JS redirect needed.
+# On the FIRST render after a hard refresh, the cookie controller fires its JS,
+# sends the cookie value back, and triggers an automatic rerun.  On that second
+# render _cookie_rt is populated and we can restore the Supabase session silently.
 if IS_CLOUD and "user_email" not in st.session_state:
-    try:
-        _cookie_rt = st.context.cookies.get("dentai_rt", "")
-        if _cookie_rt:
+    _cookie_rt = _cookie_ctrl.get("dentai_rt") or ""
+    if _cookie_rt:
+        try:
             _sb = _get_supabase()
             _refreshed = _sb.auth.refresh_session(_cookie_rt)
             if _refreshed and _refreshed.user:
                 st.session_state.user_email = _refreshed.user.email
+                # Store the rotated token immediately
                 if _refreshed.session and _refreshed.session.refresh_token:
-                    st.session_state._store_rt = _refreshed.session.refresh_token
+                    _cookie_ctrl.set(
+                        "dentai_rt",
+                        _refreshed.session.refresh_token,
+                        max_age=2592000,
+                    )
                 st.rerun()
-    except Exception:
-        pass  # Cookie missing, expired, or invalid → fall through to login gate
+        except Exception:
+            # Cookie expired or revoked → clear it and show login
+            _cookie_ctrl.remove("dentai_rt")
 
 if IS_CLOUD and "user_email" not in st.session_state:
     st.set_page_config(page_title="DentAI – NSU Login", page_icon="🦷", layout="centered")
@@ -273,9 +288,12 @@ if IS_CLOUD and "user_email" not in st.session_state:
                             "type": "email",
                         })
                         st.session_state.user_email = resp.user.email
-                        # Persist refresh token so page refresh doesn't log out
-                        if resp.session and resp.session.refresh_token:
-                            st.session_state._store_rt = resp.session.refresh_token
+                        # Write the refresh token as a 30-day cookie via CookieController
+                        _rt = (resp.session.refresh_token
+                               if resp.session and resp.session.refresh_token
+                               else None)
+                        if _rt:
+                            _cookie_ctrl.set("dentai_rt", _rt, max_age=2592000)
                         if "otp_sent_to" in st.session_state:
                             del st.session_state.otp_sent_to
                         st.rerun()
@@ -286,16 +304,6 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 st.rerun()
 
     st.stop()
-
-# ─── Write rotated refresh token to cookie (30-day, same-site) ──────────────────
-if IS_CLOUD and "_store_rt" in st.session_state:
-    _rt_val = st.session_state.get("_store_rt", "")
-    del st.session_state["_store_rt"]
-    if _rt_val:
-        components.html(
-            f"<script>document.cookie='dentai_rt={_rt_val};max-age=2592000;path=/;SameSite=Strict';</script>",
-            height=0,
-        )
 
 # ─── Handle session-load query param (from sidebar HTML links) ───────────────────
 if "load_sess" in st.query_params:
@@ -2408,11 +2416,9 @@ with st.sidebar:
             )
         if st.button("🚪 Sign Out", use_container_width=True, type="primary",
                      key="logout_btn"):
-            # Expire the auth cookie then wipe session
-            components.html(
-                "<script>document.cookie='dentai_rt=;max-age=0;path=/;SameSite=Strict';</script>",
-                height=0,
-            )
+            # Remove the auth cookie via CookieController, then wipe session
+            if IS_CLOUD:
+                _cookie_ctrl.remove("dentai_rt")
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
             st.rerun()
