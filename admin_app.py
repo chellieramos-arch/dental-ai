@@ -202,11 +202,18 @@ st.markdown("""
   /* ── Primary button ── */
   .stButton > button[kind="primary"] {
     background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
-    color: #000 !important;
+    color: #000000 !important;
     border: none !important;
     border-radius: 8px !important;
-    font-weight: 700 !important;
+    font-weight: 800 !important;
+    font-size: 1rem !important;
     padding: 10px 20px !important;
+    opacity: 1 !important;
+  }
+  .stButton > button[kind="primary"] p {
+    color: #000000 !important;
+    font-weight: 800 !important;
+    opacity: 1 !important;
   }
   .stButton > button[kind="primary"]:hover {
     box-shadow: 0 4px 20px rgba(0,200,255,0.35) !important;
@@ -222,6 +229,10 @@ st.markdown("""
     border-color: var(--cyan) !important;
     color: var(--cyan) !important;
   }
+
+  /* ── Input placeholder ── */
+  [data-testid="stTextInput"] input::placeholder { color: #7a90b0 !important; opacity: 1 !important; }
+  [data-testid="stTextInput"] input { color: #e8f0fe !important; font-size: 0.95rem !important; }
 
   /* ── Login ── */
   .login-container {
