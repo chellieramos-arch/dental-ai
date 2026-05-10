@@ -1546,6 +1546,29 @@ section[data-testid="stSidebar"] code {
     pointer-events: none;
 }
 
+/* Scrollable session list container */
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {
+    background: transparent !important;
+    border: none !important;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(253,185,19,0.4) transparent;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar {
+    width: 4px;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-track {
+    background: transparent;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb {
+    background: rgba(253,185,19,0.4);
+    border-radius: 2px;
+}
+section[data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] > div::-webkit-scrollbar-thumb:hover {
+    background: rgba(253,185,19,0.7);
+}
+
 /* Popover dropdown panel */
 [data-testid="stPopoverBody"],
 [data-testid="stPopoverBody"] > div,
@@ -2255,70 +2278,69 @@ with st.sidebar:
             "letter-spacing:0.3px;margin:0 0 10px 0;'>🕘 Past Sessions</p>",
             unsafe_allow_html=True
         )
-        # Show newest first
-        for sess in reversed(_all_sessions):
-            is_active   = sess["id"] == st.session_state.current_session_id
-            is_renaming = st.session_state.get("_renaming_id") == sess["id"]
-            _date  = sess.get("created_at", "")[:10]
-            _count = len(sess.get("exchanges", []))
-            _title = sess.get("title", "Untitled")
-            _title_short = (_title[:44] + "…") if len(_title) > 44 else _title
+        # Scrollable session list
+        with st.container(height=320, border=False):
+            for sess in reversed(_all_sessions):
+                is_active   = sess["id"] == st.session_state.current_session_id
+                is_renaming = st.session_state.get("_renaming_id") == sess["id"]
+                _title = sess.get("title", "Untitled")
+                _title_short = (_title[:44] + "…") if len(_title) > 44 else _title
 
-            # ── Rename mode ──────────────────────────────────────────────────
-            if is_renaming:
-                new_name = st.text_input(
-                    "Rename",
-                    value=_title,
-                    key=f"rename_input_{sess['id']}",
-                    label_visibility="collapsed",
-                )
-                col_save, col_cancel = st.columns(2)
-                with col_save:
-                    if st.button("Save", key=f"rename_save_{sess['id']}", use_container_width=True):
-                        if new_name.strip():
-                            rename_session(sess["id"], new_name.strip())
-                        del st.session_state["_renaming_id"]
-                        st.rerun()
-                with col_cancel:
-                    if st.button("Cancel", key=f"rename_cancel_{sess['id']}", use_container_width=True):
-                        del st.session_state["_renaming_id"]
-                        st.rerun()
-                continue
-
-            # ── Normal display ───────────────────────────────────────────────
-            col_card, col_menu = st.columns([6, 1])
-            with col_card:
-                if is_active:
-                    st.markdown(
-                        "<div class='sess-item'>"
-                        "<div class='sess-dot'></div>"
-                        f"<div class='sess-title'>{_title_short}</div>"
-                        "</div>",
-                        unsafe_allow_html=True
+                # ── Rename mode ──────────────────────────────────────────────────
+                if is_renaming:
+                    new_name = st.text_input(
+                        "Rename",
+                        value=_title,
+                        key=f"rename_input_{sess['id']}",
+                        label_visibility="collapsed",
                     )
-                else:
-                    if st.button(
-                        _title_short,
-                        key=f"load_{sess['id']}",
-                        use_container_width=True,
-                    ):
-                        st.session_state.current_session_id = sess["id"]
-                        st.session_state.chat_history       = load_session(sess["id"])
-                        st.session_state.latest_images      = []
-                        st.rerun()
+                    col_save, col_cancel = st.columns(2)
+                    with col_save:
+                        if st.button("Save", key=f"rename_save_{sess['id']}", use_container_width=True):
+                            if new_name.strip():
+                                rename_session(sess["id"], new_name.strip())
+                            del st.session_state["_renaming_id"]
+                            st.rerun()
+                    with col_cancel:
+                        if st.button("Cancel", key=f"rename_cancel_{sess['id']}", use_container_width=True):
+                            del st.session_state["_renaming_id"]
+                            st.rerun()
+                    continue
 
-            with col_menu:
-                with st.popover("⋮", use_container_width=True):
-                    if st.button("✏️  Rename", key=f"rename_btn_{sess['id']}", use_container_width=True):
-                        st.session_state["_renaming_id"] = sess["id"]
-                        st.rerun()
-                    if st.button("🗑  Delete", key=f"del_btn_{sess['id']}", use_container_width=True):
-                        if is_active:
-                            st.session_state.current_session_id = new_session_id()
-                            st.session_state.chat_history       = []
+                # ── Normal display ───────────────────────────────────────────────
+                col_card, col_menu = st.columns([6, 1])
+                with col_card:
+                    if is_active:
+                        st.markdown(
+                            "<div class='sess-item'>"
+                            "<div class='sess-dot'></div>"
+                            f"<div class='sess-title'>{_title_short}</div>"
+                            "</div>",
+                            unsafe_allow_html=True
+                        )
+                    else:
+                        if st.button(
+                            _title_short,
+                            key=f"load_{sess['id']}",
+                            use_container_width=True,
+                        ):
+                            st.session_state.current_session_id = sess["id"]
+                            st.session_state.chat_history       = load_session(sess["id"])
                             st.session_state.latest_images      = []
-                        delete_session(sess["id"])
-                        st.rerun()
+                            st.rerun()
+
+                with col_menu:
+                    with st.popover("⋮", use_container_width=True):
+                        if st.button("✏️  Rename", key=f"rename_btn_{sess['id']}", use_container_width=True):
+                            st.session_state["_renaming_id"] = sess["id"]
+                            st.rerun()
+                        if st.button("🗑  Delete", key=f"del_btn_{sess['id']}", use_container_width=True):
+                            if is_active:
+                                st.session_state.current_session_id = new_session_id()
+                                st.session_state.chat_history       = []
+                                st.session_state.latest_images      = []
+                            delete_session(sess["id"])
+                            st.rerun()
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
