@@ -2077,9 +2077,11 @@ _COMPLEX_KEYWORDS = {
     "surgical", "surgery", "extraction", "implant",
     "endodontic", "root canal", "perforation",
     "periodontal", "bone loss", "furcation",
-    # Clinical reasoning phrases
-    "why", "explain", "compare", "difference between",
+    # Clinical reasoning phrases (kept specific — avoid broad words like "why"/"explain")
+    "compare", "difference between",
     "when to", "should i", "is it safe",
+    "explain the mechanism", "explain why", "explain how",
+    "what causes", "what is the cause",
 }
 
 def route_model(question: str) -> str:
@@ -2224,9 +2226,26 @@ components.html("""
 
 
 # ─── Conversation History ────────────────────────────────────────────────────────
-def render_response(assistant_text, sources, images):
+def render_response(assistant_text, sources, images, model=""):
     """Render one assistant turn: response card + optional image panel + sources."""
     t = _UI[st.session_state.lang]
+
+    # ── Model badge (subtle, for testing / transparency) ─────────────────────
+    if model:
+        _is_haiku  = "haiku"  in model.lower()
+        _badge_icon  = "⚡" if _is_haiku else "🧠"
+        _badge_label = "Haiku" if _is_haiku else "Sonnet"
+        _badge_color = "rgba(0,200,100,0.15)" if _is_haiku else "rgba(123,94,167,0.2)"
+        _badge_text_color = "#00c864" if _is_haiku else "#b89fd8"
+        st.markdown(
+            f"<div style='text-align:right;margin-bottom:4px;'>"
+            f"<span style='font-size:0.65rem;padding:2px 8px;border-radius:20px;"
+            f"background:{_badge_color};color:{_badge_text_color};"
+            f"font-weight:600;letter-spacing:0.3px;'>{_badge_icon} {_badge_label}</span>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
     if images:
         col_text, col_imgs = st.columns([3, 1.4], gap="medium")
         with col_text:
@@ -2287,7 +2306,7 @@ if _has_history:
             unsafe_allow_html=True
         )
         imgs = st.session_state.latest_images if i == len(st.session_state.chat_history) - 1 else []
-        render_response(exchange["assistant"], exchange["sources"], imgs)
+        render_response(exchange["assistant"], exchange["sources"], imgs, exchange.get("model", ""))
 
 
 # ─── Fixed-bottom chat input (native Streamlit) ───────────────────────────────────
@@ -2376,6 +2395,7 @@ if case_input:
         "user_ctx":  user_ctx,        # kept in memory for API threading
         "assistant": assistant_text,
         "sources":   sources,
+        "model":     selected_model,
         "timestamp": datetime.now().isoformat(),
     })
     save_session(st.session_state.current_session_id, st.session_state.chat_history)
