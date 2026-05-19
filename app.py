@@ -2088,15 +2088,27 @@ def route_model(question: str) -> str:
     """
     Return the Claude model best suited for this question.
 
-    If CLAUDE_MODEL is set in .env, that always wins (manual override).
-    Otherwise: any complex-keyword match → Sonnet; everything else → Haiku.
+    Priority order:
+      1. Sidebar override (user picked Haiku or Sonnet explicitly)
+      2. CLAUDE_MODEL env var (hard override for admins)
+      3. Keyword-based auto routing
     """
     from config import CLAUDE_MODEL, CLAUDE_MODEL_SIMPLE, CLAUDE_MODEL_COMPLEX
 
-    # Manual override takes priority
+    # 1. Sidebar override
+    _override = st.session_state.get("model_override", "🔀 Auto")
+    if _override == "⚡ Haiku (Fast)":
+        print("[DentAI] routing → Haiku  (user override)")
+        return CLAUDE_MODEL_SIMPLE
+    if _override == "🧠 Sonnet (Advanced)":
+        print("[DentAI] routing → Sonnet  (user override)")
+        return CLAUDE_MODEL_COMPLEX
+
+    # 2. Hard env var override
     if CLAUDE_MODEL:
         return CLAUDE_MODEL
 
+    # 3. Auto keyword routing
     q_lower = question.lower()
     for kw in _COMPLEX_KEYWORDS:
         if kw in q_lower:
@@ -2494,6 +2506,24 @@ with st.sidebar:
                                 st.query_params["load_sess"]        = _del_new_id
                             delete_session(sess["id"])
                             st.rerun()
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ── Model selector ───────────────────────────────────────────────────────────
+    st.markdown(
+        "<p style='color:#FDB913;font-size:0.85rem;font-weight:700;"
+        "letter-spacing:0.3px;margin:0 0 8px 0;'>🤖 AI Model</p>",
+        unsafe_allow_html=True
+    )
+    _model_choice = st.radio(
+        "model_selector",
+        options=["🔀 Auto", "⚡ Haiku (Fast)", "🧠 Sonnet (Advanced)"],
+        index=["🔀 Auto", "⚡ Haiku (Fast)", "🧠 Sonnet (Advanced)"].index(
+            st.session_state.get("model_override", "🔀 Auto")
+        ),
+        label_visibility="collapsed",
+    )
+    st.session_state.model_override = _model_choice
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
