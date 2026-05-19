@@ -47,7 +47,7 @@ if IS_LOCAL:
 if IS_CLOUD:
     from pinecone import Pinecone as PineconeClient
     from supabase import create_client as create_supabase_client
-    from streamlit_cookies_controller import CookieController as _CookieController
+    import extra_streamlit_components as stx
 
 try:
     import fitz  # PyMuPDF
@@ -227,18 +227,16 @@ st.set_page_config(
 )
 
 # ─── Cookie manager (cloud only) — must be AFTER set_page_config ─────────────────
-# streamlit-cookies-controller is a reliable, modern cookie manager that works
-# correctly on Streamlit Community Cloud across page refreshes.
 if IS_CLOUD:
     from datetime import timedelta as _timedelta
-    _cookie_mgr = _CookieController()
+    _cookie_mgr = stx.CookieManager(key="dentai_cookie_mgr")
 
 # ─── Auto-restore session from cookie (survives page refresh) ────────────────────
 # CookieManager fires its JS on first render, reads all browser cookies, and sends
 # them back via Streamlit's component protocol — triggering a rerun.  On that second
 # render _cookie_rt is populated and we restore the Supabase session silently.
 if IS_CLOUD and "user_email" not in st.session_state:
-    _cookie_rt = _cookie_mgr.get("dentai_rt") or ""
+    _cookie_rt = _cookie_mgr.get(cookie="dentai_rt", key="get_rt_restore") or ""
     if _cookie_rt:
         try:
             _sb = _get_supabase()
@@ -247,11 +245,13 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 st.session_state.user_email = _refreshed.user.email
                 # Write the rotated refresh token back as a new cookie
                 if _refreshed.session and _refreshed.session.refresh_token:
-                    _cookie_mgr.set("dentai_rt", _refreshed.session.refresh_token)
+                    _cookie_mgr.set("dentai_rt", _refreshed.session.refresh_token,
+                                    expires_at=datetime.now() + _timedelta(days=30),
+                                    key="set_rt_rotated")
                 st.rerun()
         except Exception:
             # Cookie expired or revoked → clear it and show login
-            _cookie_mgr.remove("dentai_rt")
+            _cookie_mgr.delete("dentai_rt", key="del_rt_expired")
 
 if IS_CLOUD and "user_email" not in st.session_state:
     st.markdown("""
@@ -387,7 +387,9 @@ if IS_CLOUD and "user_email" not in st.session_state:
                             except Exception:
                                 pass
                         if _rt:
-                            _cookie_mgr.set("dentai_rt", _rt)
+                            _cookie_mgr.set("dentai_rt", _rt,
+                                            expires_at=datetime.now() + _timedelta(days=30),
+                                            key="set_rt_login")
                         if "otp_sent_to" in st.session_state:
                             del st.session_state.otp_sent_to
                         st.rerun()
@@ -2522,7 +2524,7 @@ with st.sidebar:
                      key="logout_btn"):
             # Remove the auth cookie, then wipe session
             if IS_CLOUD:
-                _cookie_mgr.remove("dentai_rt")
+                _cookie_mgr.delete("dentai_rt", key="del_rt_logout")
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
             st.rerun()
