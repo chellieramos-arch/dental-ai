@@ -47,7 +47,6 @@ if IS_LOCAL:
 if IS_CLOUD:
     from pinecone import Pinecone as PineconeClient
     from supabase import create_client as create_supabase_client
-    import extra_streamlit_components as stx
 
 try:
     import fitz  # PyMuPDF
@@ -226,32 +225,21 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ─── Cookie manager (cloud only) — must be AFTER set_page_config ─────────────────
-if IS_CLOUD:
-    from datetime import timedelta as _timedelta
-    _cookie_mgr = stx.CookieManager(key="dentai_cookie_mgr")
-
-# ─── Auto-restore session from cookie (survives page refresh) ────────────────────
-# CookieManager fires its JS on first render, reads all browser cookies, and sends
-# them back via Streamlit's component protocol — triggering a rerun.  On that second
-# render _cookie_rt is populated and we restore the Supabase session silently.
+# ─── Auto-restore session from URL token (survives page refresh) ─────────────────
+# We store the Supabase access token in ?s= so a browser refresh restores auth
+# without any cookie library. The token is verified server-side on each restore.
 if IS_CLOUD and "user_email" not in st.session_state:
-    _cookie_rt = _cookie_mgr.get(cookie="dentai_rt") or ""
-    if _cookie_rt:
+    _url_token = st.query_params.get("s", "")
+    if _url_token:
         try:
             _sb = _get_supabase()
-            _refreshed = _sb.auth.refresh_session(_cookie_rt)
-            if _refreshed and _refreshed.user:
-                st.session_state.user_email = _refreshed.user.email
-                # Write the rotated refresh token back as a new cookie
-                if _refreshed.session and _refreshed.session.refresh_token:
-                    _cookie_mgr.set("dentai_rt", _refreshed.session.refresh_token,
-                                    expires_at=datetime.now() + _timedelta(days=30),
-                                    key="set_rt_rotated")
+            _user_resp = _sb.auth.get_user(jwt=_url_token)
+            if _user_resp and _user_resp.user:
+                st.session_state.user_email = _user_resp.user.email
                 st.rerun()
         except Exception:
-            # Cookie expired or revoked → clear it and show login
-            _cookie_mgr.delete("dentai_rt", key="del_rt_expired")
+            # Token expired or invalid — clear it and show login
+            st.query_params.pop("s", None)
 
 if IS_CLOUD and "user_email" not in st.session_state:
     st.markdown("""
@@ -374,22 +362,9 @@ if IS_CLOUD and "user_email" not in st.session_state:
                             "type": "email",
                         })
                         st.session_state.user_email = resp.user.email
-                        # Get refresh token — try resp.session first, fall back to
-                        # sb.auth.get_session() in case the OTP flow doesn't inline it
-                        _rt = None
-                        if resp.session and resp.session.refresh_token:
-                            _rt = resp.session.refresh_token
-                        else:
-                            try:
-                                _s = sb.auth.get_session()
-                                if _s and _s.refresh_token:
-                                    _rt = _s.refresh_token
-                            except Exception:
-                                pass
-                        if _rt:
-                            _cookie_mgr.set("dentai_rt", _rt,
-                                            expires_at=datetime.now() + _timedelta(days=30),
-                                            key="set_rt_login")
+                        # Store access token in URL so page refresh restores the session
+                        if resp.session and resp.session.access_token:
+                            st.query_params["s"] = resp.session.access_token
                         if "otp_sent_to" in st.session_state:
                             del st.session_state.otp_sent_to
                         st.rerun()
@@ -2522,9 +2497,8 @@ with st.sidebar:
             )
         if st.button("🚪 Sign Out", use_container_width=True, type="primary",
                      key="logout_btn"):
-            # Remove the auth cookie, then wipe session
-            if IS_CLOUD:
-                _cookie_mgr.delete("dentai_rt", key="del_rt_logout")
+            # Clear auth token from URL and wipe session
+            st.query_params.pop("s", None)
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
             st.rerun()
