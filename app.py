@@ -15,6 +15,23 @@ except Exception:
     pass  # running locally without secrets.toml is fine
 
 import anthropic
+import time
+
+def _create_with_retry(client, max_retries=4, **kwargs):
+    """Retry anthropic messages.create on 529 Overloaded errors with exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return client.messages.create(**kwargs)
+        except Exception as e:
+            is_overloaded = (
+                getattr(e, "status_code", None) == 529
+                or "overloaded" in str(e).lower()
+            )
+            if not is_overloaded or attempt == max_retries - 1:
+                raise
+            wait = 2 ** attempt  # 1s, 2s, 4s, 8s
+            time.sleep(wait)
+
 from llama_index.core import VectorStoreIndex
 from llama_index.core import StorageContext
 
@@ -393,12 +410,14 @@ if IS_CLOUD and "user_email" not in st.session_state:
 # ─── Handle session-load query param (from sidebar HTML links) ───────────────────
 if "load_sess" in st.query_params:
     _load_id = st.query_params.get("load_sess", "")
-    st.query_params.clear()
-    if _load_id:
+    if _load_id and _load_id != st.session_state.get("current_session_id"):
+        # Different session requested — load it (URL already has the right param)
         st.session_state.current_session_id = _load_id
         st.session_state.chat_history       = load_session(_load_id)
         st.session_state.latest_images      = []
         st.rerun()
+    elif not _load_id:
+        st.query_params.clear()
 
 # ─── Session State ────────────────────────────────────────────────────────────────
 if "current_session_id" not in st.session_state:
@@ -416,6 +435,9 @@ if "latest_images" not in st.session_state:
     st.session_state.latest_images = []  # images from the most recent response only
 if "lang" not in st.session_state:
     st.session_state.lang = "en"         # "en" or "es"
+
+# Keep the URL in sync so browser refresh restores the current session
+st.query_params["load_sess"] = st.session_state.current_session_id
 
 # ─── UI Text Strings (bilingual) ─────────────────────────────────────────────────
 _UI = {
@@ -2056,7 +2078,7 @@ def load_index():
 
 
 # ─── Anthropic Client + System Prompt ───────────────────────────────────────────
-anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), max_retries=3)
 
 # ─── Hybrid Model Routing ────────────────────────────────────────────────────────
 # Simple questions → Haiku (~$0.004/query, fast)
@@ -2356,12 +2378,21 @@ if case_input:
     # ── Route to the right model based on question complexity ──
     selected_model = route_model(case_input)
 
-    response = anthropic_client.messages.create(
-        model=selected_model,
-        max_tokens=2500,
-        system=build_system_prompt(st.session_state.lang),
-        messages=api_messages
-    )
+    try:
+        response = _create_with_retry(
+            anthropic_client,
+            model=selected_model,
+            max_tokens=2500,
+            system=build_system_prompt(st.session_state.lang),
+            messages=api_messages
+        )
+    except Exception as e:
+        _loader.empty()
+        if "overloaded" in str(e).lower() or getattr(e, "status_code", None) == 529:
+            st.warning("⚠️ The AI is experiencing high demand right now. Please wait a moment and try again.")
+        else:
+            st.error(f"An error occurred: {e}")
+        st.stop()
     assistant_text = response.content[0].text
 
     _loader.empty()
@@ -2392,9 +2423,11 @@ with st.sidebar:
 
     st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
     if st.button(_t["btn_new_chat"], type="primary"):
-        st.session_state.current_session_id = new_session_id()
+        _new_id = new_session_id()
+        st.session_state.current_session_id = _new_id
         st.session_state.chat_history       = []
         st.session_state.latest_images      = []
+        st.query_params["load_sess"]        = _new_id
         st.rerun()
 
     # ── Past sessions browser ────────────────────────────────────────────────────
@@ -2455,6 +2488,7 @@ with st.sidebar:
                             st.session_state.current_session_id = sess["id"]
                             st.session_state.chat_history       = load_session(sess["id"])
                             st.session_state.latest_images      = []
+                            st.query_params["load_sess"]        = sess["id"]
                             st.rerun()
 
                 with col_menu:
@@ -2464,9 +2498,11 @@ with st.sidebar:
                             st.rerun()
                         if st.button("🗑  Delete", key=f"del_btn_{sess['id']}", use_container_width=True):
                             if is_active:
-                                st.session_state.current_session_id = new_session_id()
+                                _del_new_id = new_session_id()
+                                st.session_state.current_session_id = _del_new_id
                                 st.session_state.chat_history       = []
                                 st.session_state.latest_images      = []
+                                st.query_params["load_sess"]        = _del_new_id
                             delete_session(sess["id"])
                             st.rerun()
 
