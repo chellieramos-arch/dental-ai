@@ -236,7 +236,7 @@ if IS_CLOUD:
 # them back via Streamlit's component protocol — triggering a rerun.  On that second
 # render _cookie_rt is populated and we restore the Supabase session silently.
 if IS_CLOUD and "user_email" not in st.session_state:
-    _cookie_rt = _cookie_mgr.get(cookie="dentai_rt", key="get_rt_restore") or ""
+    _cookie_rt = _cookie_mgr.get(cookie="dentai_rt") or ""
     if _cookie_rt:
         try:
             _sb = _get_supabase()
