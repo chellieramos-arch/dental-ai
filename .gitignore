@@ -12,3 +12,6 @@ documents/
 
 # macOS
 .DS_Store
+
+# Streamlit secrets — never commit these
+.streamlit/secrets.toml
