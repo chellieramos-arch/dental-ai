@@ -467,18 +467,8 @@ def show_topnav():
     cols = st.columns(len(pages) + 1)
     for i, label in enumerate(pages):
         with cols[i]:
-            active = st.session_state.get("page") == label
-            style = (
-                "background:rgba(0,200,255,0.12);color:#00c8ff;border:1px solid rgba(0,200,255,0.35);"
-                if active else
-                "background:transparent;color:#7a90b0;border:1px solid rgba(255,255,255,0.08);"
-            )
-            st.markdown(
-                f"<div style='{style}border-radius:8px;padding:8px 0;text-align:center;"
-                f"font-size:0.85rem;font-weight:600;cursor:pointer;'>{label}</div>",
-                unsafe_allow_html=True,
-            )
-            if st.button(label, key=f"nav_{label}", use_container_width=True):
+            if st.button(label, key=f"nav_{label}", use_container_width=True,
+                         type="primary" if st.session_state.get("page") == label else "secondary"):
                 st.session_state["page"] = label
                 st.rerun()
     with cols[-1]:
