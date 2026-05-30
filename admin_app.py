@@ -285,6 +285,16 @@ CHUNK_OVERLAP  = 200
 BATCH_SIZE     = 96
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
+def _admin_token() -> str:
+    """Deterministic token derived from the admin password — stored in URL to survive refresh."""
+    import hashlib
+    return hashlib.sha256(f"dentai_admin:{ADMIN_PASSWORD}".encode()).hexdigest()[:24]
+
+# ── Auto-restore admin session from URL token ─────────────────────────────────
+if ADMIN_PASSWORD and not st.session_state.get("admin_auth"):
+    if st.query_params.get("t") == _admin_token():
+        st.session_state["admin_auth"] = True
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helpers
@@ -429,6 +439,7 @@ def show_login():
             if ADMIN_PASSWORD and pw == ADMIN_PASSWORD:
                 st.session_state["admin_auth"] = True
                 st.session_state.pop("sources_cache", None)
+                st.query_params["t"] = _admin_token()
                 st.rerun()
             elif not ADMIN_PASSWORD:
                 st.error("ADMIN_PASSWORD not set in secrets.")
@@ -475,6 +486,7 @@ def show_topnav():
         if st.button("Sign out", use_container_width=True):
             for k in ["admin_auth", "sources_cache", "page"]:
                 st.session_state.pop(k, None)
+            st.query_params.pop("t", None)
             st.rerun()
 
 
