@@ -2083,6 +2083,63 @@ TOOLS = [
         },
     },
     {
+        "name": "annotate_image",
+        "description": (
+            "Annotate the attached radiograph with clinical findings. Call this when the student "
+            "has uploaded a radiograph AND you have identified specific findings to mark — "
+            "carious lesions, possible fractures, or bone level measurements. "
+            "Provide coordinates as fractions of the image dimensions (0.0 to 1.0). "
+            "For bone levels, measure the distance from the CEJ to the alveolar crest and "
+            "estimate in millimeters using standard tooth anatomy as a scale reference "
+            "(average crown height ~8-10mm, root ~14-17mm)."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "findings": {
+                    "type": "array",
+                    "description": "List of findings to annotate on the image.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "type": {
+                                "type": "string",
+                                "enum": ["caries", "fracture", "bone_level", "pathology"],
+                                "description": "Type of finding.",
+                            },
+                            "label": {
+                                "type": "string",
+                                "description": "Short label to display (e.g. 'Caries #14 mesial', 'Bone loss 4mm').",
+                            },
+                            "x": {
+                                "type": "number",
+                                "description": "Horizontal center of finding as fraction of image width (0.0=left, 1.0=right).",
+                            },
+                            "y": {
+                                "type": "number",
+                                "description": "Vertical center of finding as fraction of image height (0.0=top, 1.0=bottom).",
+                            },
+                            "x2": {
+                                "type": "number",
+                                "description": "For fracture lines and bone level measurements: end x coordinate (fraction).",
+                            },
+                            "y2": {
+                                "type": "number",
+                                "description": "For fracture lines and bone level measurements: end y coordinate (fraction).",
+                            },
+                            "measurement": {
+                                "type": "string",
+                                "description": "Optional measurement string (e.g. '3.5mm', '6mm bone loss').",
+                            },
+                        },
+                        "required": ["type", "label", "x", "y"],
+                    },
+                },
+            },
+            "required": ["findings"],
+        },
+    },
+    {
         "name": "ask_clarification",
         "description": (
             "Ask the student ONE targeted clarifying question when their query is missing critical "
@@ -2319,7 +2376,8 @@ def build_faculty_context(faculty_key: str) -> str:
     )
 
 
-def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = "general") -> str:
+def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = "general",
+                        has_image: bool = False) -> str:
     base = (
         "You are a clinical study assistant for a dental student at NSU College of Dental Medicine. "
         "You were built to help them review and apply their own school materials during clinical work and study. "
@@ -2348,8 +2406,34 @@ def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = 
         "- If the student's learning profile shows recurring topics or gaps, weave that awareness "
         "into your response naturally.\n\n"
     )
+
+    radiograph_guidance = ""
+    if has_image:
+        radiograph_guidance = (
+            "RADIOGRAPH / IMAGE ANALYSIS GUIDELINES:\n"
+            "The student has attached a clinical image — likely a dental radiograph or intraoral photo. "
+            "Analyze it thoroughly before searching documents or answering.\n\n"
+            "For radiographs, systematically evaluate:\n"
+            "- Image type and quality (periapical, bitewing, panoramic, CBCT)\n"
+            "- Tooth identification and numbering\n"
+            "- Bone levels: crestal bone height, horizontal/vertical bone loss, furcation involvement\n"
+            "- Periapical status: PDL space widening, periapical lucency/opacity, root tip pathology\n"
+            "- Caries: interproximal, occlusal, cervical, secondary/recurrent under restorations\n"
+            "- Existing restorations: type, integrity, marginal fit, secondary caries\n"
+            "- Root morphology: length, curvature, resorption, root canal visibility\n"
+            "- Crown-to-root ratio\n"
+            "- Any anomalies: calcifications, supernumerary teeth, pathologic lesions\n\n"
+            "For intraoral photos, evaluate:\n"
+            "- Gingival health: color, contour, texture, inflammation, recession\n"
+            "- Visible caries, fractures, wear facets, erosion\n"
+            "- Soft tissue lesions: describe location, size, color, borders, surface texture\n"
+            "- Restoration condition\n\n"
+            "Structure your radiographic/image findings clearly, then integrate with the student's "
+            "question and any relevant curriculum materials.\n\n"
+        )
+
     faculty_context = build_faculty_context(faculty_key)
-    return base + faculty_context + memory_context + _LANG_INSTRUCTION[lang]
+    return base + radiograph_guidance + faculty_context + memory_context + _LANG_INSTRUCTION[lang]
 
 
 # ─── Query Logging + Topic Extraction ────────────────────────────────────────────
@@ -2632,6 +2716,123 @@ def _tool_drug_interactions(drugs: list) -> str:
     )
 
 
+# ─── Radiograph Annotation ───────────────────────────────────────────────────────
+
+def _annotate_radiograph(image_bytes: bytes, findings: list) -> bytes:
+    """
+    Draw clinical annotations on a radiograph using Pillow.
+
+    Finding types and their visual styles:
+      caries      → red semi-transparent circle + label
+      fracture    → orange dashed line between (x,y) and (x2,y2)
+      bone_level  → blue horizontal measurement line + mm label
+      pathology   → purple semi-transparent circle + label
+    """
+    from PIL import Image, ImageDraw, ImageFont
+    import io as _io
+
+    img = Image.open(_io.BytesIO(image_bytes)).convert("RGBA")
+    w, h = img.size
+
+    # Overlay layer for semi-transparent fills
+    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw_ov = ImageDraw.Draw(overlay)
+    # Crisp layer for lines and text
+    draw    = ImageDraw.Draw(img)
+
+    # Try to load a font; fall back to default
+    try:
+        font       = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(12, h // 40))
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",      max(10, h // 50))
+    except Exception:
+        font       = ImageFont.load_default()
+        font_small = font
+
+    COLORS = {
+        "caries":     (220,  50,  50, 160),   # red, semi-transparent fill
+        "fracture":   (255, 140,   0, 220),   # orange
+        "bone_level": ( 30, 144, 255, 230),   # blue
+        "pathology":  (148,   0, 211, 160),   # purple, semi-transparent fill
+    }
+
+    radius = max(14, min(w, h) // 28)   # scale marker size to image
+
+    for f in findings:
+        ftype = f.get("type", "pathology")
+        label = f.get("label", "")
+        fx    = int(f.get("x", 0.5) * w)
+        fy    = int(f.get("y", 0.5) * h)
+        color = COLORS.get(ftype, COLORS["pathology"])
+        solid = color[:3] + (255,)  # fully opaque version for outlines/text
+
+        if ftype == "fracture":
+            # Dashed line from (x,y) to (x2,y2)
+            fx2 = int(f.get("x2", f.get("x", 0.5) + 0.05) * w)
+            fy2 = int(f.get("y2", f.get("y", 0.5)) * h)
+            # Simulate dashes by drawing short segments
+            import math
+            length = math.hypot(fx2 - fx, fy2 - fy)
+            steps  = max(1, int(length / 12))
+            for seg in range(steps):
+                if seg % 2 == 0:
+                    sx1 = int(fx + (fx2 - fx) * seg / steps)
+                    sy1 = int(fy + (fy2 - fy) * seg / steps)
+                    sx2 = int(fx + (fx2 - fx) * (seg + 1) / steps)
+                    sy2 = int(fy + (fy2 - fy) * (seg + 1) / steps)
+                    draw.line([(sx1, sy1), (sx2, sy2)], fill=solid, width=3)
+            # Label at midpoint
+            mx, my = (fx + fx2) // 2, (fy + fy2) // 2
+            draw.text((mx + 4, my - 14), label, fill=solid, font=font_small)
+
+        elif ftype == "bone_level":
+            # Horizontal measurement line with end ticks + label
+            fx2 = int(f.get("x2", min(1.0, f.get("x", 0.5) + 0.12)) * w)
+            fy2 = int(f.get("y2", f.get("y", 0.5)) * h)
+            draw.line([(fx, fy), (fx2, fy2)], fill=solid, width=3)
+            tick = radius // 2
+            draw.line([(fx,  fy - tick), (fx,  fy + tick)], fill=solid, width=2)
+            draw.line([(fx2, fy2 - tick), (fx2, fy2 + tick)], fill=solid, width=2)
+            meas = f.get("measurement", label)
+            draw.text((min(fx, fx2), min(fy, fy2) - 18), meas, fill=solid, font=font)
+
+        else:
+            # Circle marker (caries / pathology)
+            bbox = [fx - radius, fy - radius, fx + radius, fy + radius]
+            draw_ov.ellipse(bbox, fill=color, outline=solid[:3] + (255,))
+            draw_ov.ellipse(  # inner ring for clarity
+                [fx - radius + 3, fy - radius + 3, fx + radius - 3, fy + radius - 3],
+                outline=(255, 255, 255, 180), width=1,
+            )
+            # Label above the circle
+            draw.text((fx - radius, fy - radius - 18), label, fill=(255, 255, 255, 255), font=font_small)
+
+    # Composite overlay onto image
+    img = Image.alpha_composite(img, overlay).convert("RGB")
+
+    # Legend (bottom-left)
+    legend_items = [
+        ("● Caries",    (220, 50,  50)),
+        ("/ Fracture",  (255, 140,  0)),
+        ("— Bone level",(30,  144, 255)),
+        ("● Pathology", (148,   0, 211)),
+    ]
+    present_types = {f.get("type") for f in findings}
+    legend_items  = [(lbl, col) for lbl, col in legend_items
+                     if lbl.split()[1].lower().replace(".", "") in present_types
+                     or ("bone" in lbl.lower() and "bone_level" in present_types)]
+    if legend_items:
+        draw_final = ImageDraw.Draw(img)
+        lx, ly = 10, h - 10 - len(legend_items) * 20
+        for lbl, col in legend_items:
+            draw_final.rectangle([lx - 2, ly - 2, lx + 120, ly + 16], fill=(0, 0, 0, 180) if False else (20, 20, 20))
+            draw_final.text((lx, ly), lbl, fill=col, font=font_small)
+            ly += 20
+
+    out = _io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()
+
+
 # ─── Agent Loop ──────────────────────────────────────────────────────────────────
 
 def run_agent(
@@ -2640,6 +2841,8 @@ def run_agent(
     memory_ctx: str,
     faculty_key: str,
     lang: str,
+    image_bytes: bytes = None,
+    image_media_type: str = "image/jpeg",
 ) -> tuple:
     """
     Run the agentic tool-use loop.
@@ -2666,12 +2869,34 @@ def run_agent(
     for ex in history:
         messages.append({"role": "user",      "content": ex.get("user_ctx", ex["user"])})
         messages.append({"role": "assistant", "content": ex["assistant"]})
-    messages.append({"role": "user", "content": question})
+    # If an image is attached, send it as a vision content block alongside the question
+    if image_bytes:
+        import base64 as _b64
+        messages.append({
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image_media_type,
+                        "data": _b64.standard_b64encode(image_bytes).decode("utf-8"),
+                    },
+                },
+                {
+                    "type": "text",
+                    "text": question,
+                },
+            ],
+        })
+    else:
+        messages.append({"role": "user", "content": question})
 
-    system = build_system_prompt(lang, memory_ctx, faculty_key)
+    system = build_system_prompt(lang, memory_ctx, faculty_key, has_image=bool(image_bytes))
 
-    all_sources: list  = []
+    all_sources: list     = []
     retrieved_nodes: list = []
+    annotated_image: bytes = None   # set when annotate_image tool is called
 
     # Tool-use loop — continue until provide_answer or ask_clarification is called
     for _iteration in range(8):   # safety cap
@@ -2689,7 +2914,7 @@ def run_agent(
             text = " ".join(
                 b.text for b in response.content if hasattr(b, "text")
             ).strip()
-            return text or "I wasn't able to generate a response. Please try again.", all_sources, retrieved_nodes, None
+            return text or "I wasn't able to generate a response. Please try again.", all_sources, retrieved_nodes, None, annotated_image
 
         if response.stop_reason != "tool_use":
             break
@@ -2738,6 +2963,22 @@ def run_agent(
                     "content":     context or "No relevant materials found for that query.",
                 })
 
+            elif block.name == "annotate_image":
+                findings = block.input.get("findings", [])
+                if image_bytes and findings:
+                    try:
+                        annotated_image = _annotate_radiograph(image_bytes, findings)
+                        result_msg = f"Annotated radiograph generated with {len(findings)} finding(s) marked."
+                    except Exception as ann_err:
+                        result_msg = f"Annotation could not be rendered: {ann_err}"
+                else:
+                    result_msg = "No image attached or no findings provided — skipping annotation."
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     result_msg,
+                })
+
             elif block.name == "query_drug_interactions":
                 drugs = block.input.get("drugs", [])
                 result = _tool_drug_interactions(drugs)
@@ -2759,28 +3000,27 @@ def run_agent(
 
             elif block.name == "ask_clarification":
                 clarification_q = block.input.get("question", "")
-                return None, [], [], clarification_q
+                return None, [], [], clarification_q, None
 
             elif block.name == "provide_answer":
                 answer      = block.input.get("answer", "")
                 needs_images = block.input.get("needs_images", True)
                 sources     = block.input.get("sources", all_sources)
-                # Merge declared sources with accumulated ones
                 all_sources = list(dict.fromkeys(sources + all_sources))
                 final_nodes = retrieved_nodes if needs_images else []
-                terminal = True
+                terminal    = True
                 tool_results.append({
                     "type":        "tool_result",
                     "tool_use_id": block.id,
                     "content":     "Answer delivered.",
                 })
                 messages.append({"role": "user", "content": tool_results})
-                return answer, all_sources, final_nodes, None
+                return answer, all_sources, final_nodes, None, annotated_image
 
         if not terminal:
             messages.append({"role": "user", "content": tool_results})
 
-    return "I wasn't able to complete that request. Please try again.", all_sources, retrieved_nodes, None
+    return "I wasn't able to complete that request. Please try again.", all_sources, retrieved_nodes, None, annotated_image
 
 
 # ─── Hero Section ────────────────────────────────────────────────────────────────
@@ -2871,7 +3111,7 @@ components.html("""
 
 
 # ─── Conversation History ────────────────────────────────────────────────────────
-def render_response(assistant_text, sources, images, model=""):
+def render_response(assistant_text, sources, images, model="", annotated_image=None):
     """Render one assistant turn: response card + optional image panel + sources."""
     t = _UI[st.session_state.lang]
 
@@ -2890,6 +3130,18 @@ def render_response(assistant_text, sources, images, model=""):
             f"</div>",
             unsafe_allow_html=True
         )
+
+    # ── Annotated radiograph (shown prominently above the text response) ──
+    if annotated_image:
+        st.markdown(
+            "<div style='margin-bottom:16px;'>"
+            "<div style='font-size:0.78rem;font-weight:700;color:#003087;"
+            "letter-spacing:0.4px;text-transform:uppercase;margin-bottom:8px;'>"
+            "🔬 Annotated Radiograph</div>",
+            unsafe_allow_html=True,
+        )
+        st.image(annotated_image, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     if images:
         col_text, col_imgs = st.columns([3, 1.4], gap="medium")
@@ -2950,8 +3202,15 @@ if _has_history:
             "</div>",
             unsafe_allow_html=True
         )
-        imgs = st.session_state.latest_images if i == len(st.session_state.chat_history) - 1 else []
-        render_response(exchange["assistant"], exchange["sources"], imgs, exchange.get("model", ""))
+        # Show attached image thumbnail if this exchange had one
+        _exch_img = (st.session_state.get("exchange_images") or {}).get(str(i))
+        if _exch_img:
+            _img_col, _ = st.columns([1, 4])
+            with _img_col:
+                st.image(_exch_img, caption="📎 Attached radiograph", use_container_width=True)
+        imgs     = st.session_state.latest_images if i == len(st.session_state.chat_history) - 1 else []
+        ann_img  = st.session_state.get("latest_annotated_image") if i == len(st.session_state.chat_history) - 1 else None
+        render_response(exchange["assistant"], exchange["sources"], imgs, exchange.get("model", ""), annotated_image=ann_img)
 
 
 # ─── Pending Clarification Display ───────────────────────────────────────────────
@@ -2968,6 +3227,43 @@ if "pending_clarification" in st.session_state:
         "</div>",
         unsafe_allow_html=True,
     )
+
+# ─── Image upload (compact, above chat input) ────────────────────────────────────
+st.markdown("""
+<style>
+/* Compact image uploader strip */
+.upload-strip [data-testid="stFileUploader"] {
+    border: 1px dashed rgba(0,48,135,0.25) !important;
+    border-radius: 10px !important;
+    background: rgba(0,48,135,0.03) !important;
+    padding: 4px 8px !important;
+}
+.upload-strip [data-testid="stFileUploader"] label { display: none !important; }
+.upload-strip [data-testid="stFileUploaderDropzone"] {
+    padding: 6px 12px !important;
+    min-height: unset !important;
+}
+.upload-strip [data-testid="stFileUploaderDropzoneInstructions"] span {
+    font-size: 0.78rem !important;
+    color: #94a3b8 !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown("<div class='upload-strip'>", unsafe_allow_html=True)
+_uploaded_image = st.file_uploader(
+    "Attach radiograph",
+    type=["png", "jpg", "jpeg"],
+    label_visibility="collapsed",
+    key="image_uploader",
+)
+st.markdown("</div>", unsafe_allow_html=True)
+
+# Preview thumbnail if image is attached
+if _uploaded_image:
+    _prev_col, _ = st.columns([1, 5])
+    with _prev_col:
+        st.image(_uploaded_image, caption="📎 Attached", use_container_width=True)
 
 # ─── Fixed-bottom chat input (native Streamlit) ───────────────────────────────────
 _placeholder = _t["placeholder_followup"] if (_has_history or "pending_original_question" in st.session_state) else _t["placeholder_new"]
@@ -3005,17 +3301,27 @@ if case_input:
     else:
         full_question = case_input
 
+    # ── Read attached image if present ──
+    _image_bytes      = None
+    _image_media_type = "image/jpeg"
+    if _uploaded_image is not None:
+        _image_bytes = _uploaded_image.getvalue()
+        _mime        = _uploaded_image.type or "image/jpeg"
+        _image_media_type = _mime if _mime.startswith("image/") else "image/jpeg"
+
     # ── Build longitudinal memory profile (Haiku-analyzed) ──
     memory_ctx  = analyze_student_memory(st.session_state.current_session_id)
     faculty_key = st.session_state.get("faculty_key", "general")
 
     try:
-        assistant_text, sources, relevant_nodes, clarification_q = run_agent(
-            question    = full_question,
-            history     = st.session_state.chat_history,
-            memory_ctx  = memory_ctx,
-            faculty_key = faculty_key,
-            lang        = st.session_state.lang,
+        assistant_text, sources, relevant_nodes, clarification_q, annotated_img = run_agent(
+            question         = full_question,
+            history          = st.session_state.chat_history,
+            memory_ctx       = memory_ctx,
+            faculty_key      = faculty_key,
+            lang             = st.session_state.lang,
+            image_bytes      = _image_bytes,
+            image_media_type = _image_media_type,
         )
     except Exception as e:
         _loader.empty()
@@ -3033,7 +3339,10 @@ if case_input:
         st.session_state["pending_clarification"]     = clarification_q
         st.rerun()
 
-    # ── Extract images only when the agent flagged them as useful ──
+    # ── Store annotated radiograph if produced ──
+    st.session_state.latest_annotated_image = annotated_img
+
+    # ── Extract curriculum images only when the agent flagged them as useful ──
     if relevant_nodes:
         page_images, _ = extract_page_images(relevant_nodes, max_images=5)
     else:
@@ -3042,13 +3351,20 @@ if case_input:
 
     # ── Save exchange to history + persist ──
     st.session_state.chat_history.append({
-        "user":      case_input,
-        "user_ctx":  full_question,   # kept in memory for API threading
-        "assistant": assistant_text,
-        "sources":   sources,
-        "model":     "agent/sonnet",
-        "timestamp": datetime.now().isoformat(),
+        "user":       case_input,
+        "user_ctx":   full_question,
+        "assistant":  assistant_text,
+        "sources":    sources,
+        "model":      "agent/sonnet",
+        "timestamp":  datetime.now().isoformat(),
+        "has_image":  _image_bytes is not None,
     })
+    # Store image bytes in memory only (not persisted — too large for Supabase/JSON)
+    if _image_bytes:
+        if "exchange_images" not in st.session_state:
+            st.session_state.exchange_images = {}
+        _exchange_idx = len(st.session_state.chat_history) - 1
+        st.session_state.exchange_images[str(_exchange_idx)] = _image_bytes
     save_session(st.session_state.current_session_id, st.session_state.chat_history)
 
     # ── Log query for faculty insights report ──
