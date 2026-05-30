@@ -441,49 +441,49 @@ def show_login():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Sidebar nav
+# Top nav
 # ─────────────────────────────────────────────────────────────────────────────
 
-def show_sidebar():
-    with st.sidebar:
-        st.markdown("""
-        <div class="sidebar-logo">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div style="width:32px;height:32px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
-                        border-radius:8px;display:flex;align-items:center;justify-content:center;
-                        font-size:14px;font-weight:900;color:#fff;font-family:'Space Grotesk',sans-serif;">D+</div>
-            <div>
-              <div style="font-size:1rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">
-                Dent<span style="color:#00c8ff;">AI</span> Assist
-              </div>
-              <div style="font-size:0.72rem;color:#7a90b0;margin-top:1px;">Faculty Dashboard</div>
-            </div>
+def show_topnav():
+    st.markdown("""
+    <div style="display:flex;align-items:center;justify-content:space-between;
+                padding:18px 0 20px;border-bottom:1px solid rgba(0,200,255,0.12);
+                margin-bottom:28px;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+                    border-radius:8px;display:flex;align-items:center;justify-content:center;
+                    font-size:14px;font-weight:900;color:#fff;font-family:'Space Grotesk',sans-serif;">D+</div>
+        <div>
+          <div style="font-size:1rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">
+            Dent<span style="color:#00c8ff;">AI</span> Assist
           </div>
+          <div style="font-size:0.72rem;color:#7a90b0;">Faculty Dashboard</div>
         </div>
-        """, unsafe_allow_html=True)
+      </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-        pages = ["Overview", "Student Insights", "Upload Content", "Knowledge Base"]
-
-        for label in pages:
+    pages = ["Overview", "Student Insights", "Upload Content", "Knowledge Base"]
+    cols = st.columns(len(pages) + 1)
+    for i, label in enumerate(pages):
+        with cols[i]:
             active = st.session_state.get("page") == label
-            css_class = "nav-active" if active else ""
-            st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
+            style = (
+                "background:rgba(0,200,255,0.12);color:#00c8ff;border:1px solid rgba(0,200,255,0.35);"
+                if active else
+                "background:transparent;color:#7a90b0;border:1px solid rgba(255,255,255,0.08);"
+            )
+            st.markdown(
+                f"<div style='{style}border-radius:8px;padding:8px 0;text-align:center;"
+                f"font-size:0.85rem;font-weight:600;cursor:pointer;'>{label}</div>",
+                unsafe_allow_html=True,
+            )
             if st.button(label, key=f"nav_{label}", use_container_width=True):
                 st.session_state["page"] = label
                 st.rerun()
-            st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<hr>", unsafe_allow_html=True)
-
-        st.markdown(
-            "<div style='padding:12px 16px;'>"
-            "<div style='font-size:0.75rem;color:#4b5563;'>Signed in as</div>"
-            "<div style='font-size:0.82rem;color:#9ca3af;margin-top:2px;'>Faculty / Admin</div>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        if st.button("Sign out", use_container_width=True, key="signout"):
-            for k in ["admin_auth","sources_cache","page"]:
+    with cols[-1]:
+        if st.button("Sign out", use_container_width=True):
+            for k in ["admin_auth", "sources_cache", "page"]:
                 st.session_state.pop(k, None)
             st.rerun()
 
@@ -971,7 +971,7 @@ if not st.session_state.get("admin_auth"):
 else:
     if "page" not in st.session_state:
         st.session_state["page"] = "Overview"
-    show_sidebar()
+    show_topnav()
     page = st.session_state.get("page", "Overview")
     if page == "Overview":            page_overview()
     elif page == "Student Insights":  page_insights()
