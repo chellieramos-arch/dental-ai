@@ -3250,6 +3250,24 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<div style="background:#fffbeb;border:1px solid rgba(253,185,19,0.5);border-left:4px solid #FDB913;
+            border-radius:10px;padding:10px 14px;margin-bottom:10px;display:flex;gap:10px;align-items:flex-start;">
+  <span style="font-size:1rem;flex-shrink:0;">⚠️</span>
+  <div>
+    <div style="font-size:0.82rem;font-weight:700;color:#92400e;margin-bottom:2px;">
+      Patient Privacy Notice
+    </div>
+    <div style="font-size:0.78rem;color:#78350f;line-height:1.5;">
+      Do <strong>not</strong> upload radiographs containing patient identifiers
+      (name, date of birth, patient ID, or date of service).
+      Remove all identifying information before uploading.
+      Uploading identifiable patient data may violate HIPAA and NSU's patient privacy policies.
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
 st.markdown("<div class='upload-strip'>", unsafe_allow_html=True)
 _uploaded_image = st.file_uploader(
     "Attach radiograph",
