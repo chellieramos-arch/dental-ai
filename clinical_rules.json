@@ -1,0 +1,276 @@
+{
+  "version": "1.0",
+  "source_notes": "Rules derived from ADA clinical practice guidelines, ACC/AHA cardiac guidelines, and standard dental pharmacology references. For clinical guidance only — not a substitute for clinical judgment.",
+  "rules": [
+
+    {
+      "id": "AC-001",
+      "condition": "warfarin anticoagulation",
+      "keywords": ["warfarin", "coumadin", "anticoagulant", "anticoagulation", "blood thinner"],
+      "procedures": ["extraction", "surgery", "implant", "biopsy", "deep scaling", "flap surgery"],
+      "severity": "caution",
+      "recommendation": "Do NOT routinely discontinue warfarin before dental extractions. Check INR within 24–72 hours of procedure. If INR ≤ 3.5, proceed with local hemostatic measures (local anesthesia with vasoconstrictor, sutures, oxidized cellulose, tranexamic acid mouthwash). If INR > 3.5, contact prescribing physician before proceeding. Avoid NSAIDs for post-op pain — use acetaminophen.",
+      "source": "ADA/ACC guidelines; Douketis et al."
+    },
+
+    {
+      "id": "AC-002",
+      "condition": "direct oral anticoagulants (DOACs)",
+      "keywords": ["eliquis", "apixaban", "xarelto", "rivaroxaban", "pradaxa", "dabigatran", "savaysa", "edoxaban", "doac", "noac"],
+      "procedures": ["extraction", "surgery", "implant", "biopsy", "periodontal surgery"],
+      "severity": "caution",
+      "recommendation": "For minor procedures (1–3 simple extractions): do not interrupt DOAC therapy. Time procedure 12–24 hours after last dose (trough level). Use local hemostatic measures. For major surgery (multiple extractions, implants, flap surgery): consult prescribing physician about timing — typically skip one dose or take last dose evening before morning procedure. No reversal agent needed for routine dentistry.",
+      "source": "ADA Oral Health Topics; Wahl et al."
+    },
+
+    {
+      "id": "AC-003",
+      "condition": "aspirin therapy",
+      "keywords": ["aspirin", "asa", "low-dose aspirin", "antiplatelet", "baby aspirin", "clopidogrel", "plavix", "dual antiplatelet"],
+      "procedures": ["extraction", "surgery", "scaling", "implant"],
+      "severity": "caution",
+      "recommendation": "Do NOT discontinue aspirin (75–325mg) before dental procedures — risk of cardiovascular event outweighs bleeding risk. Bleeding is manageable with local hemostatic measures. For dual antiplatelet therapy (aspirin + clopidogrel), same approach applies — do not stop either agent. Use sutures, pressure, and oxidized cellulose as needed.",
+      "source": "ADA Oral Health Topics; Grines et al. ACC/AHA"
+    },
+
+    {
+      "id": "BPHP-001",
+      "condition": "bisphosphonate therapy — oral",
+      "keywords": ["bisphosphonate", "fosamax", "alendronate", "boniva", "ibandronate", "actonel", "risedronate", "mronj", "osteoporosis"],
+      "procedures": ["extraction", "implant", "surgery", "bone graft", "periodontal surgery"],
+      "severity": "caution",
+      "recommendation": "Oral bisphosphonates (for osteoporosis): MRONJ risk is low (<0.1%) for procedures < 4 years of use. Inform patient of risk, obtain informed consent. If on oral bisphosphonate > 4 years OR concurrent corticosteroids: consider drug holiday (consult physician) — stop 2 months before surgery, resume when healing confirmed. Promote conservative treatment alternatives where possible. Avoid dental implants if risk is elevated.",
+      "source": "ADA position statement on bisphosphonates; Ruggiero et al."
+    },
+
+    {
+      "id": "BPHP-002",
+      "condition": "bisphosphonate therapy — IV (oncology)",
+      "keywords": ["zoledronic acid", "zometa", "pamidronate", "aredia", "iv bisphosphonate", "denosumab", "prolia", "xgeva", "multiple myeloma", "bone metastasis"],
+      "procedures": ["extraction", "implant", "surgery", "bone graft"],
+      "severity": "contraindicated",
+      "recommendation": "IV bisphosphonates (cancer patients): HIGH MRONJ risk — up to 2–12%. Avoid all elective invasive dental procedures if possible. Urgent extractions: consult oncologist first. Use conservative surgical technique, primary wound closure, no primary closure under tension. Post-op antibiotics. Implants are generally contraindicated. Denosumab (Prolia/Xgeva) carries similar risk.",
+      "source": "AAOMS position paper; Ruggiero et al. 2022"
+    },
+
+    {
+      "id": "DM-001",
+      "condition": "diabetes mellitus — controlled",
+      "keywords": ["diabetes", "diabetic", "type 1 diabetes", "type 2 diabetes", "insulin", "metformin", "blood sugar", "hba1c", "hyperglycemia"],
+      "procedures": ["extraction", "surgery", "implant", "periodontal treatment", "scaling"],
+      "severity": "caution",
+      "recommendation": "HbA1c < 7% (well-controlled): treat normally. HbA1c 7–9%: proceed with caution — schedule morning appointments after patient has eaten, monitor for hypoglycemia. HbA1c > 9% (poorly controlled): elective surgery should be deferred until better control achieved; emergency/urgent care only with antibiotic prophylaxis for surgical procedures. Note: insulin-dependent patients — confirm they have eaten before procedure.",
+      "source": "ADA diabetes and oral health guidelines"
+    },
+
+    {
+      "id": "DM-002",
+      "condition": "diabetes — wound healing and infection risk",
+      "keywords": ["diabetes", "diabetic", "poor healing", "infection", "wound healing", "immunocompromised"],
+      "procedures": ["implant", "surgery", "extraction", "bone graft"],
+      "severity": "caution",
+      "recommendation": "Diabetic patients have impaired wound healing and increased infection risk. For surgical procedures: consider prophylactic antibiotics (amoxicillin 2g 1hr before, or clindamycin 600mg if PCN-allergic). Implant success rates are lower in poorly controlled diabetes — ensure HbA1c < 8% before implant placement. Post-op monitoring for signs of infection is critical.",
+      "source": "ADA; ITI Consensus"
+    },
+
+    {
+      "id": "CV-001",
+      "condition": "infective endocarditis — prophylaxis required",
+      "keywords": ["infective endocarditis", "endocarditis", "prosthetic valve", "heart valve", "congenital heart", "cardiac defect", "endocarditis prophylaxis", "ie prophylaxis", "valvular"],
+      "procedures": ["extraction", "scaling", "root planing", "implant", "biopsy", "surgery", "periodontal probing"],
+      "severity": "prophylaxis_required",
+      "recommendation": "AHA/ADA high-risk conditions requiring IE prophylaxis: (1) prosthetic cardiac valve, (2) previous IE, (3) congenital heart disease — unrepaired cyanotic CHD, repaired CHD with residual defects, or repaired CHD within 6 months of repair, (4) cardiac transplant with valvulopathy. Regimen: Amoxicillin 2g PO 30–60min before procedure. PCN allergy: Clindamycin 600mg OR Cephalexin 2g OR Azithromycin 500mg. Only for procedures involving manipulation of gingival tissue or periapical region of teeth.",
+      "source": "AHA 2007 guidelines; Wilson et al."
+    },
+
+    {
+      "id": "CV-002",
+      "condition": "recent myocardial infarction",
+      "keywords": ["myocardial infarction", "heart attack", "mi", "stemi", "nstemi", "recent cardiac event", "coronary artery disease", "recent stent"],
+      "procedures": ["elective dental", "extraction", "surgery", "implant"],
+      "severity": "contraindicated",
+      "recommendation": "Defer all elective dental treatment for at least 6 months post-MI. Within 6 months: emergency/urgent care only in consultation with cardiologist. Minimize stress (consider oral sedation), limit epinephrine to 0.04mg (2 carpules of 1:100,000), avoid general anesthesia in-office. Patients on dual antiplatelet therapy post-stent: do NOT stop medications — coordinate with cardiologist.",
+      "source": "ADA; ACC/AHA perioperative guidelines"
+    },
+
+    {
+      "id": "CV-003",
+      "condition": "hypertension",
+      "keywords": ["hypertension", "high blood pressure", "htn", "antihypertensive", "beta blocker", "calcium channel blocker", "ace inhibitor", "elevated blood pressure"],
+      "procedures": ["any dental procedure", "extraction", "surgery", "local anesthesia"],
+      "severity": "caution",
+      "recommendation": "Take BP before procedure. Stage 1 HTN (130–139/80–89): treat normally. Stage 2 HTN (140–159/90–99): proceed with caution, minimize stress. BP ≥ 160/100: defer elective care, refer to physician. BP ≥ 180/110: dental emergency only — use non-epinephrine LA if needed. Epinephrine limit: 0.04mg (2 carpules 1:100,000) for cardiac patients — standard dose is safe in controlled HTN. Note: calcium channel blockers (nifedipine, amlodipine) cause gingival enlargement.",
+      "source": "ADA; ACC/AHA 2017 HTN guidelines"
+    },
+
+    {
+      "id": "CV-004",
+      "condition": "pacemaker or implantable cardioverter-defibrillator",
+      "keywords": ["pacemaker", "icd", "implantable cardioverter", "defibrillator", "cardiac device", "implanted device"],
+      "procedures": ["electrosurgery", "ultrasonic scaler", "pulp tester", "apex locator", "tens"],
+      "severity": "caution",
+      "recommendation": "Ultrasonic scalers, apex locators, and electric pulp testers are generally safe with modern pacemakers. Electrosurgery (electrocautery) poses interference risk — avoid or use bipolar technique only. Confirm device type with cardiologist if uncertain. No antibiotic prophylaxis required for pacemakers alone (unless concurrent valvular issue). Use short bursts if electrosurgery is necessary.",
+      "source": "ADA Oral Health Topics; Trenter & Walmsley"
+    },
+
+    {
+      "id": "PREG-001",
+      "condition": "pregnancy",
+      "keywords": ["pregnant", "pregnancy", "gravid", "trimester", "prenatal", "obstetric", "fetal"],
+      "procedures": ["radiograph", "extraction", "scaling", "medication", "elective treatment"],
+      "severity": "caution",
+      "recommendation": "Radiographs: safe with lead apron and thyroid collar — delay non-urgent X-rays to 2nd trimester if possible. Best treatment window: 2nd trimester (weeks 14–20). Avoid elective procedures in 1st trimester (organogenesis) and late 3rd trimester (positioning discomfort, supine hypotension). Emergency care is appropriate at any stage. Safe medications: acetaminophen, penicillin, amoxicillin, cephalexin, clindamycin. Avoid: metronidazole (1st trimester), tetracyclines, fluoroquinolones, ibuprofen (especially 3rd trimester), high-dose aspirin.",
+      "source": "ADA; ACOG; Briggs Drugs in Pregnancy"
+    },
+
+    {
+      "id": "PREG-002",
+      "condition": "pregnancy — local anesthesia",
+      "keywords": ["local anesthesia", "lidocaine", "anesthetic", "epinephrine", "pregnant", "pregnancy"],
+      "procedures": ["local anesthesia", "any procedure requiring anesthesia"],
+      "severity": "caution",
+      "recommendation": "Lidocaine with epinephrine (1:100,000 or 1:200,000) is safe and preferred during pregnancy — Category B. Adequate anesthesia is important to minimize stress/pain response which is more harmful than the anesthetic. Mepivacaine (plain) is Category C — use with caution. Prilocaine: avoid in large doses (risk of methemoglobinemia). Bupivacaine: generally avoided.",
+      "source": "ADA; FDA pregnancy categories"
+    },
+
+    {
+      "id": "RENAL-001",
+      "condition": "chronic kidney disease / renal failure",
+      "keywords": ["kidney disease", "renal failure", "ckd", "dialysis", "hemodialysis", "nephrology", "creatinine", "gfr", "renal insufficiency"],
+      "procedures": ["medication prescribing", "extraction", "surgery"],
+      "severity": "modification_required",
+      "recommendation": "Drug dosing adjustments required: NSAIDs — avoid (worsen renal function). Metronidazole, clarithromycin — dose reduce in severe CKD. Amoxicillin — generally safe. Codeine/opioids — accumulate, use with caution. For dialysis patients: schedule dentistry day after dialysis (heparin cleared, patient at best medical status). Check with nephrologist for AV fistula arm precautions (no BP cuff on fistula arm). Bleeding tendency is common — use hemostatic measures.",
+      "source": "ADA Oral Health Topics; renal pharmacokinetics references"
+    },
+
+    {
+      "id": "LIVER-001",
+      "condition": "liver disease / hepatic impairment",
+      "keywords": ["liver disease", "hepatic", "cirrhosis", "hepatitis", "liver failure", "jaundice", "alcoholic liver", "coagulopathy"],
+      "procedures": ["medication prescribing", "extraction", "surgery"],
+      "severity": "modification_required",
+      "recommendation": "Coagulopathy is common — check PT/INR before invasive procedures. Thrombocytopenia possible — check platelet count. Drug metabolism impaired: avoid acetaminophen in alcoholic liver disease or >2g/day. NSAIDs — use with caution (GI bleeding risk, worsen hepatic function). Amoxicillin generally safe. Codeine/opioids — accumulate significantly, avoid or use with extreme caution. Lidocaine dose reduce in severe hepatic failure (metabolized by liver).",
+      "source": "ADA; hepatic pharmacokinetics guidelines"
+    },
+
+    {
+      "id": "ALLERGY-001",
+      "condition": "penicillin allergy",
+      "keywords": ["penicillin allergy", "amoxicillin allergy", "beta-lactam allergy", "allergic to penicillin", "pcn allergy"],
+      "procedures": ["antibiotic prescribing", "endocarditis prophylaxis", "post-op antibiotics"],
+      "severity": "modification_required",
+      "recommendation": "True PCN allergy (anaphylaxis, urticaria, angioedema): use clindamycin 300mg TID x 7 days (treatment) or clindamycin 600mg single dose (IE prophylaxis). Alternative for prophylaxis: azithromycin 500mg or clarithromycin 500mg. Cross-reactivity with cephalosporins: ~1–2% with true PCN anaphylaxis — generally avoided in high-risk allergy history. Note: most reported PCN 'allergies' are not true IgE-mediated — consider allergy testing for patients who frequently need antibiotics.",
+      "source": "ADA antibiotic guidelines; AAAAI"
+    },
+
+    {
+      "id": "IMMUNO-001",
+      "condition": "immunosuppression",
+      "keywords": ["immunosuppressed", "immunocompromised", "transplant", "chemotherapy", "hiv", "aids", "steroids", "prednisone", "methotrexate", "biologics", "neutropenia", "low white blood cells"],
+      "procedures": ["extraction", "surgery", "implant", "scaling"],
+      "severity": "caution",
+      "recommendation": "Obtain CBC with differential before invasive procedures: ANC < 1000/mm³ — prophylactic antibiotics required; ANC < 500/mm³ — defer elective care, emergency only with hematology consult. Platelet count < 50,000 — consult physician before invasive treatment; < 20,000 — defer all invasive care. Steroid-dependent patients: consider steroid supplementation for major procedures (stress dosing). Healing impaired — plan conservatively, monitor closely post-op.",
+      "source": "ADA Oral Health Topics; AAOM guidelines"
+    },
+
+    {
+      "id": "IMMUNO-002",
+      "condition": "HIV / AIDS",
+      "keywords": ["hiv", "aids", "antiretroviral", "cd4", "viral load", "hiv positive"],
+      "procedures": ["extraction", "surgery", "scaling", "any dental procedure"],
+      "severity": "caution",
+      "recommendation": "CD4 > 200 and undetectable viral load: treat normally, standard precautions. CD4 < 200: increased infection risk — consider prophylactic antibiotics for invasive procedures. CD4 < 50: consult physician, defer elective care. Common oral manifestations: pseudomembranous candidiasis, oral hairy leukoplakia, Kaposi's sarcoma, necrotizing periodontal disease — treat aggressively. Drug interactions with antiretrovirals: some protease inhibitors inhibit CYP3A4 — check interactions before prescribing.",
+      "source": "ADA; HIV Dental Alliance"
+    },
+
+    {
+      "id": "ENDO-001",
+      "condition": "adrenal insufficiency / steroid therapy",
+      "keywords": ["adrenal insufficiency", "addison", "steroid", "corticosteroid", "prednisone", "cortisol", "stress dose", "hpa axis"],
+      "procedures": ["major surgery", "extraction", "significant dental procedures"],
+      "severity": "modification_required",
+      "recommendation": "Patients on systemic corticosteroids (≥20mg prednisone/day > 3 weeks) may have HPA axis suppression. For minor procedures (simple extraction, scaling): double the usual morning steroid dose on day of procedure. For major surgery: consult endocrinologist — may need supplemental IV hydrocortisone. Signs of adrenal crisis: hypotension, weakness, nausea, confusion — treat with IV hydrocortisone 100mg immediately and call 911.",
+      "source": "ADA; Gibson & Neate"
+    },
+
+    {
+      "id": "THYROID-001",
+      "condition": "hyperthyroidism / thyroid disease",
+      "keywords": ["hyperthyroidism", "thyroid", "graves disease", "hyperthyroid", "thyrotoxicosis", "uncontrolled thyroid"],
+      "procedures": ["local anesthesia", "elective procedures", "any procedure"],
+      "severity": "caution",
+      "recommendation": "Uncontrolled hyperthyroidism: defer elective care — risk of thyroid storm with stress/epinephrine. Controlled hyperthyroidism: treat normally. Limit epinephrine with caution — some sources recommend limiting to 0.04mg (2 carpules 1:100,000) in cardiac-sensitized patients. Hypothyroidism (controlled): treat normally. Avoid CNS depressants in uncontrolled hypothyroidism.",
+      "source": "ADA Oral Health Topics"
+    },
+
+    {
+      "id": "BLEED-001",
+      "condition": "bleeding disorders — hemophilia and von Willebrand",
+      "keywords": ["hemophilia", "von willebrand", "bleeding disorder", "factor viii", "factor ix", "coagulopathy", "vwd"],
+      "procedures": ["extraction", "surgery", "scaling", "implant", "biopsy"],
+      "severity": "modification_required",
+      "recommendation": "ALWAYS consult hematologist before any invasive procedure. Factor replacement therapy required pre-operatively (type and dose per hematologist). Tranexamic acid mouthwash 4.8% — rinse for 2 minutes, 4x daily for 5–7 days post-op; avoid swallowing. DDAVP (desmopressin) useful in mild hemophilia A and Type I VWD — given 1 hour before procedure. Avoid aspirin and NSAIDs. Use sutures, oxidized cellulose, and pressure. Hospitalization may be needed for major surgery.",
+      "source": "ADA; WFH guidelines"
+    },
+
+    {
+      "id": "RESP-001",
+      "condition": "asthma",
+      "keywords": ["asthma", "bronchospasm", "inhaler", "albuterol", "salbutamol", "steroid inhaler", "reactive airway"],
+      "procedures": ["any dental procedure", "nitrous oxide", "medication prescribing"],
+      "severity": "caution",
+      "recommendation": "Confirm asthma is well-controlled before elective procedures. Patient should bring rescue inhaler. Avoid aspirin and NSAIDs — can trigger bronchospasm in aspirin-sensitive asthmatics (up to 20% of adults). Avoid sulfite-containing local anesthetics (some cartridges contain metabisulfite as a preservative for epinephrine) — use non-epinephrine LA if aspirin-sensitive or sulfite-allergic. Nitrous oxide is safe. Recognize asthma attack: bronchodilator (albuterol inhaler), call 911 if no improvement.",
+      "source": "ADA Oral Health Topics"
+    },
+
+    {
+      "id": "OSTEO-001",
+      "condition": "osteoporosis",
+      "keywords": ["osteoporosis", "bone density", "dexa scan", "fracture risk", "bone loss systemic"],
+      "procedures": ["implant", "extraction", "surgery"],
+      "severity": "caution",
+      "recommendation": "Osteoporosis itself does not contraindicate dental implants, but bone quality/quantity must be assessed (CBCT). If patient is on antiresorptive therapy (bisphosphonates, denosumab) — see BPHP rules. Osteoporosis correlates with periodontal bone loss — monitor carefully. Implant success rates may be lower with severe systemic bone loss.",
+      "source": "ADA; ITI Consensus"
+    },
+
+    {
+      "id": "DRUG-001",
+      "condition": "epinephrine — cardiac patients general limit",
+      "keywords": ["epinephrine", "adrenaline", "vasoconstrictor", "cardiac patient", "heart patient", "cardiovascular"],
+      "procedures": ["local anesthesia"],
+      "severity": "caution",
+      "recommendation": "Standard safe limit for patients with significant cardiovascular disease: 0.04mg epinephrine total = 2 cartridges of 1:100,000 or 4 cartridges of 1:200,000. Slow injection, aspiration before injection. No absolute contraindication to epinephrine in cardiac patients — inadequate anesthesia from epinephrine-free LA causes more endogenous epinephrine release from pain/stress.",
+      "source": "ADA; Yagiela; Malamed"
+    },
+
+    {
+      "id": "DRUG-002",
+      "condition": "antibiotic prescribing — standard dental indications",
+      "keywords": ["antibiotic", "infection", "cellulitis", "abscess", "Ludwig angina", "spreading infection"],
+      "procedures": ["dental infection treatment", "prescribing"],
+      "severity": "caution",
+      "recommendation": "Antibiotics indicated for: spreading dental infection (cellulitis, lymph node involvement, systemic signs — fever, malaise), Ludwig's angina (emergency), pericoronitis with systemic involvement. First line: amoxicillin 500mg TID x 5–7 days. PCN allergy: clindamycin 300mg TID x 5–7 days. Metronidazole 500mg TID can be added for anaerobic coverage. Antibiotics NOT indicated for: localized abscess (incision and drainage is treatment), irreversible pulpitis without systemic signs, routine post-extraction without risk factors.",
+      "source": "ADA antibiotic stewardship guidelines 2019"
+    },
+
+    {
+      "id": "DRUG-003",
+      "condition": "NSAIDs contraindications",
+      "keywords": ["nsaid", "ibuprofen", "naproxen", "anti-inflammatory", "pain management"],
+      "procedures": ["post-operative pain management", "prescribing"],
+      "severity": "caution",
+      "recommendation": "Avoid NSAIDs in: peptic ulcer disease, GI bleed history, renal failure (CKD), concurrent warfarin/anticoagulant use, late pregnancy (3rd trimester), aspirin-sensitive asthma, post-op after bone grafting (may impair bone healing). Preferred alternative: acetaminophen 500–1000mg QID (max 4g/day; 2g/day in liver disease/alcoholism). For moderate-severe pain: acetaminophen + ibuprofen combination is superior to either alone when not contraindicated.",
+      "source": "ADA analgesic guidelines; Moore et al."
+    },
+
+    {
+      "id": "DRUG-004",
+      "condition": "opioid prescribing",
+      "keywords": ["opioid", "narcotic", "codeine", "hydrocodone", "oxycodone", "tramadol", "controlled substance"],
+      "procedures": ["post-operative pain management", "prescribing"],
+      "severity": "caution",
+      "recommendation": "Opioids are rarely first-line for dental pain. Multimodal analgesia (acetaminophen + ibuprofen alternating) is equivalent or superior for most dental pain. When opioids are appropriate: prescribe lowest effective dose for shortest duration (≤3 days for acute dental pain). Codeine is no longer recommended — variable metabolism, risk of toxicity. Avoid in: renal failure, liver disease, respiratory depression, concurrent benzodiazepine use (fatal combination risk). Follow state PDMP requirements before prescribing.",
+      "source": "ADA opioid prescribing guidelines 2023"
+    }
+  ]
+}

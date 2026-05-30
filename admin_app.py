@@ -10,9 +10,11 @@ Run locally:
 
 import os
 import io
+import json
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from urllib.parse import urlparse
+from collections import Counter
 
 import streamlit as st
 from dotenv import load_dotenv
@@ -460,7 +462,7 @@ def show_sidebar():
         </div>
         """, unsafe_allow_html=True)
 
-        pages = ["Overview", "Upload Content", "Knowledge Base"]
+        pages = ["Overview", "Student Insights", "Upload Content", "Knowledge Base"]
 
         for label in pages:
             active = st.session_state.get("page") == label
@@ -760,6 +762,202 @@ def page_knowledge_base():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Query Log Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+QUERY_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "query_logs.json")
+
+def _load_logs() -> list:
+    """Load all query logs from local JSON file."""
+    try:
+        if not os.path.exists(QUERY_LOG_FILE):
+            return []
+        with open(QUERY_LOG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+def _load_logs_cloud() -> list:
+    """Load query logs from Supabase (cloud mode)."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL",""), os.getenv("SUPABASE_KEY",""))
+        result = sb.table("query_logs").select("*").order("timestamp", desc=True).limit(5000).execute()
+        return result.data or []
+    except Exception:
+        return []
+
+def load_query_logs() -> list:
+    mode = os.getenv("MODE", "local").lower()
+    if mode == "cloud":
+        return _load_logs_cloud()
+    return _load_logs()
+
+def filter_logs_by_date(logs: list, days: int) -> list:
+    if days <= 0:
+        return logs
+    cutoff = (datetime.now() - timedelta(days=days)).isoformat()
+    return [l for l in logs if l.get("timestamp", "") >= cutoff]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Insights Page
+# ─────────────────────────────────────────────────────────────────────────────
+
+def page_insights():
+    st.markdown('<div class="page-title">Student Insights</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="page-sub">What your students are asking — aggregated across all sessions.</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Date range selector ──
+    col_range, col_refresh = st.columns([3, 1])
+    with col_range:
+        range_label = st.selectbox(
+            "Date range",
+            ["This week (7 days)", "Last 30 days", "Last 90 days", "All time"],
+            label_visibility="collapsed",
+        )
+    with col_refresh:
+        if st.button("↻  Refresh", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
+    days_map = {
+        "This week (7 days)": 7,
+        "Last 30 days": 30,
+        "Last 90 days": 90,
+        "All time": 0,
+    }
+    days = days_map[range_label]
+
+    all_logs  = load_query_logs()
+    logs      = filter_logs_by_date(all_logs, days)
+
+    if not logs:
+        st.info("No query data yet. Students need to submit questions in the app first.")
+        return
+
+    # ── Compute aggregates ──
+    total_queries   = len(logs)
+    unique_students = len(set(l.get("user_email", "unknown") for l in logs))
+
+    topic_counts: Counter = Counter()
+    for l in logs:
+        for t in l.get("topics", ["General / Other"]):
+            topic_counts[t] += 1
+    top_topic = topic_counts.most_common(1)[0][0] if topic_counts else "—"
+
+    # Queries per day (last 14 days for the chart, regardless of filter)
+    day_counts: Counter = Counter()
+    for l in logs:
+        ts = l.get("timestamp", "")
+        if ts:
+            day_counts[ts[:10]] += 1
+
+    # ── Stat cards ──
+    c1, c2, c3, c4 = st.columns(4, gap="medium")
+    cards = [
+        (c1, "blue",   "Qry",    str(total_queries),   "Total queries"),
+        (c2, "green",  "Stu",    str(unique_students),  "Active students"),
+        (c3, "purple", "Top",    top_topic.split("/")[0].strip()[:8], "Leading topic"),
+        (c4, "blue",   "Day",    f"{total_queries // max(days, 1)}", "Avg queries/day"),
+    ]
+    for col, color, icon, num, label in cards:
+        with col:
+            st.markdown(f"""
+            <div class="stat-card">
+              <div class="stat-icon {color}">{icon}</div>
+              <div>
+                <div class="stat-num">{num}</div>
+                <div class="stat-lbl">{label}</div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-top:28px;'></div>", unsafe_allow_html=True)
+
+    left, right = st.columns([1.1, 1], gap="large")
+
+    # ── Topic breakdown ──
+    with left:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h4>Topics by Volume</h4>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="card-caption">How many questions were asked about each clinical area.</div>',
+            unsafe_allow_html=True,
+        )
+
+        sorted_topics = topic_counts.most_common()
+        max_count = sorted_topics[0][1] if sorted_topics else 1
+
+        for topic, count in sorted_topics[:12]:
+            pct = int((count / max_count) * 100)
+            bar_color = "#00c8ff"
+            st.markdown(f"""
+            <div style="margin-bottom:12px;">
+              <div style="display:flex;justify-content:space-between;
+                          font-size:0.83rem;margin-bottom:4px;">
+                <span style="color:#e8f0fe;font-weight:500;">{topic}</span>
+                <span style="color:#7a90b0;">{count} {'query' if count == 1 else 'queries'}</span>
+              </div>
+              <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px;">
+                <div style="width:{pct}%;background:{bar_color};border-radius:4px;
+                             height:6px;transition:width 0.3s;"></div>
+              </div>
+            </div>""", unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    # ── Top questions + daily activity ──
+    with right:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.markdown("<h4>Most Recent Questions</h4>", unsafe_allow_html=True)
+        st.markdown(
+            '<div class="card-caption">Last 15 questions submitted by students.</div>',
+            unsafe_allow_html=True,
+        )
+
+        recent = sorted(logs, key=lambda x: x.get("timestamp",""), reverse=True)[:15]
+        st.markdown('<div class="scroll-list">', unsafe_allow_html=True)
+        for entry in recent:
+            q      = entry.get("question", "")[:120]
+            ts     = entry.get("timestamp", "")[:10]
+            email  = entry.get("user_email", "unknown")
+            topics = ", ".join(entry.get("topics", []))
+            st.markdown(f"""
+            <div class="src-item" style="flex-direction:column;align-items:flex-start;gap:4px;">
+              <div style="font-size:0.86rem;color:#e8f0fe;font-weight:500;line-height:1.4;">
+                {q}{"…" if len(entry.get("question","")) > 120 else ""}
+              </div>
+              <div style="display:flex;gap:12px;">
+                <span style="font-size:0.72rem;color:#7a90b0;">{email}</span>
+                <span style="font-size:0.72rem;color:#7a90b0;">{ts}</span>
+                <span style="font-size:0.72rem;color:#00c8ff;">{topics}</span>
+              </div>
+            </div>""", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Daily activity sparkline ──
+        if day_counts:
+            st.markdown('<div class="card" style="margin-top:0;">', unsafe_allow_html=True)
+            st.markdown("<h4>Daily Activity</h4>", unsafe_allow_html=True)
+
+            # Build sorted date series for st.bar_chart
+            sorted_days = sorted(day_counts.items())[-14:]  # last 14 days
+            chart_data  = {d: c for d, c in sorted_days}
+
+            import streamlit as _st
+            _st.bar_chart(
+                chart_data,
+                color="#00c8ff",
+                height=120,
+            )
+            st.markdown("</div>", unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry point
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -774,6 +972,7 @@ else:
         st.session_state["page"] = "Overview"
     show_sidebar()
     page = st.session_state.get("page", "Overview")
-    if page == "Overview":         page_overview()
-    elif page == "Upload Content": page_upload()
-    elif page == "Knowledge Base": page_knowledge_base()
+    if page == "Overview":            page_overview()
+    elif page == "Student Insights":  page_insights()
+    elif page == "Upload Content":    page_upload()
+    elif page == "Knowledge Base":    page_knowledge_base()

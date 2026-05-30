@@ -2049,74 +2049,192 @@ def load_index():
 # ─── Anthropic Client + System Prompt ───────────────────────────────────────────
 anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), max_retries=3)
 
-# ─── Hybrid Model Routing ────────────────────────────────────────────────────────
-# Simple questions → Haiku (~$0.004/query, fast)
-# Complex clinical reasoning → Sonnet (~$0.018/query, higher quality)
-# Override both via config.py / .env if needed.
+# ─── Agent Tools ─────────────────────────────────────────────────────────────────
+TOOLS = [
+    {
+        "name": "search_documents",
+        "description": (
+            "Search the student's NSU dental school materials for relevant clinical information. "
+            "Call multiple times with different focused queries for complex or multi-part questions. "
+            "Use a small n (3–6) for targeted lookups; larger n (10–15) for broad topic coverage."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query — be specific and clinical.",
+                },
+                "n": {
+                    "type": "integer",
+                    "description": "Number of results to retrieve (3–20). Default 8.",
+                    "default": 8,
+                },
+                "faculty_tag": {
+                    "type": "string",
+                    "description": (
+                        "Filter results to a specific faculty member's materials. "
+                        "Options: 'abuna' (Restorative/Biomimetics), 'bendayan' (Fixed Prosthodontics). "
+                        "Omit for a general search across all materials."
+                    ),
+                },
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "ask_clarification",
+        "description": (
+            "Ask the student ONE targeted clarifying question when their query is missing critical "
+            "clinical details needed for an accurate answer — e.g. tooth number, procedure type, "
+            "material, or key patient factors. Only use this when the missing info would materially "
+            "change your answer. Do NOT ask if you can give a useful answer without it."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {
+                    "type": "string",
+                    "description": "The single clarifying question to ask the student.",
+                },
+            },
+            "required": ["question"],
+        },
+    },
+    {
+        "name": "query_drug_interactions",
+        "description": (
+            "Look up drug-drug interactions and dental-relevant warnings using the NIH RxNav database. "
+            "Call this when a patient's medication list is relevant to the clinical question — "
+            "e.g. anticoagulants, antihypertensives, bisphosphonates, antibiotics, analgesics, "
+            "or any drug that may affect treatment planning or medication prescribing."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "drugs": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of drug names to check for interactions (generic or brand names).",
+                },
+            },
+            "required": ["drugs"],
+        },
+    },
+    {
+        "name": "get_clinical_guideline",
+        "description": (
+            "Query the DentAI clinical decision rules database for evidence-based guidance. "
+            "Use this for questions involving: anticoagulants, diabetes, cardiac conditions, "
+            "bisphosphonates, endocarditis prophylaxis, hypertension, pregnancy, renal/hepatic "
+            "impairment, immunosuppression, bleeding disorders, allergies, or antibiotic/analgesic prescribing. "
+            "Returns structured ADA-based recommendations with severity levels."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "condition": {
+                    "type": "string",
+                    "description": "The medical condition or drug class to look up (e.g. 'warfarin', 'diabetes', 'penicillin allergy', 'bisphosphonate').",
+                },
+                "procedure": {
+                    "type": "string",
+                    "description": "The dental procedure being considered (e.g. 'extraction', 'implant', 'prescribing antibiotics'). Optional.",
+                },
+            },
+            "required": ["condition"],
+        },
+    },
+    {
+        "name": "provide_answer",
+        "description": (
+            "Provide the final clinical answer to the student. Call this once you have gathered "
+            "sufficient information from your searches. Write the full answer in markdown."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "answer": {
+                    "type": "string",
+                    "description": "The complete clinical answer in markdown format.",
+                },
+                "needs_images": {
+                    "type": "boolean",
+                    "description": (
+                        "True if images from source materials would help (procedural / technique questions). "
+                        "False for definitions, pharmacology, or conceptual questions."
+                    ),
+                },
+                "sources": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Filenames of source documents cited in the answer.",
+                },
+            },
+            "required": ["answer", "needs_images", "sources"],
+        },
+    },
+]
 
-_COMPLEX_KEYWORDS = {
-    # Diagnosis & reasoning
-    "differential diagnosis", "differential dx", "ddx",
-    "diagnosis", "diagnose",
-    # Treatment
-    "treatment plan", "treatment planning",
-    "management", "prognosis",
-    # Pharmacology
-    "drug interaction", "drug-interaction",
-    "pharmacology", "pharmacokinetics", "pharmacodynamics",
-    "contraindication", "contraindicated",
-    "medication", "prescribe", "prescription",
-    "antibiotic", "analgesic", "sedation", "anesthesia",
-    "nsaid", "opioid",
-    # Systemic / medical
-    "systemic", "medical history", "medical condition",
-    "complication", "adverse", "risk factor",
-    "hypertension", "diabetes", "anticoagulant", "warfarin",
-    "blood pressure", "cardiac", "heart",
-    # Surgical / endo / perio
-    "surgical", "surgery", "extraction", "implant",
-    "endodontic", "root canal", "perforation",
-    "periodontal", "bone loss", "furcation",
-    # Clinical reasoning phrases (kept specific — avoid broad words like "why"/"explain")
-    "compare", "difference between",
-    "when to", "should i", "is it safe",
-    "explain the mechanism", "explain why", "explain how",
-    "what causes", "what is the cause",
+# ─── Faculty + Language helpers ──────────────────────────────────────────────────
+# (Model routing is now handled inside run_agent — Sonnet for agent orchestration,
+#  Haiku for the memory pre-analysis step. The sidebar "AI Model" selector is kept
+#  for manual overrides and is read inside run_agent via session_state.)
+
+# ─── Faculty Configuration ───────────────────────────────────────────────────────
+FACULTY = {
+    "general": {
+        "label": "🎓 General (Default)",
+        "name": None,
+        "specialty": None,
+        "style": None,
+        "corpus_tag": None,
+    },
+    "abuna": {
+        "label": "👨‍⚕️ Dr. Abuna — Restorative & Biomimetics",
+        "name": "Dr. Abuna",
+        "specialty": "Restorative Dentistry and Biomimetics",
+        "style": (
+            "Dr. Abuna specializes in Restorative Dentistry and Biomimetics — the science of restoring teeth "
+            "to mimic natural tooth structure, function, and esthetics. When responding as Dr. Abuna, "
+            "emphasize biomimetic principles: minimal intervention, preserving tooth structure, layering "
+            "techniques that replicate natural enamel and dentin properties, adhesive protocols, and "
+            "material selection that mimics natural biomechanics. Frame clinical decisions through the lens "
+            "of long-term tooth preservation and biologic width respect."
+        ),
+        "corpus_tag": "abuna",
+    },
+    "bendayan": {
+        "label": "👩‍⚕️ Dr. Bendayan — Fixed Prosthodontics",
+        "name": "Dr. Bendayan",
+        "specialty": "Fixed Prosthodontics",
+        "style": (
+            "Dr. Bendayan specializes in Fixed Prosthodontics — the design, fabrication, and placement of "
+            "fixed restorations including crowns, bridges, and implant-supported prostheses. When responding "
+            "as Dr. Bendayan, emphasize precision in preparation design, margin placement, occlusal schemes, "
+            "provisionalization, and material science for fixed restorations. Frame answers with attention "
+            "to long-term prosthetic success, cementation protocols, and the relationship between "
+            "preparation design and final restoration outcome."
+        ),
+        "corpus_tag": "bendayan",
+    },
 }
 
-def route_model(question: str) -> str:
-    """
-    Return the Claude model best suited for this question.
+# ─── DESIGNED FEATURE (not yet built): Faculty-Specific Knowledge Routing ────────
+# Students will be able to select a faculty member from the sidebar.
+# The system will:
+#   1. Filter retrieval to documents tagged to that faculty member's corpus
+#   2. Instruct Claude to reason in alignment with that faculty member's
+#      published research and clinical philosophy
+# This enables students to "learn from" specific professors on demand,
+# grounded in their actual peer-reviewed work — not a generic AI voice.
+# ─────────────────────────────────────────────────────────────────────────────────
 
-    Priority order:
-      1. Sidebar override (user picked Haiku or Sonnet explicitly)
-      2. CLAUDE_MODEL env var (hard override for admins)
-      3. Keyword-based auto routing
-    """
-    from config import CLAUDE_MODEL, CLAUDE_MODEL_SIMPLE, CLAUDE_MODEL_COMPLEX
+# ─── Query Type Detection ────────────────────────────────────────────────────────
+# Classifies a student query as PROCEDURAL or CLINICAL_REASONING.
+# Procedural: step-by-step instructions for a known task
+# Clinical Reasoning: diagnosis, treatment planning, differential, patient management
 
-    # 1. Sidebar override
-    _override = st.session_state.get("model_override", "🔀 Auto")
-    if _override == "⚡ Haiku (Fast)":
-        print("[DentAI] routing → Haiku  (user override)")
-        return CLAUDE_MODEL_SIMPLE
-    if _override == "🧠 Sonnet (Advanced)":
-        print("[DentAI] routing → Sonnet  (user override)")
-        return CLAUDE_MODEL_COMPLEX
-
-    # 2. Hard env var override
-    if CLAUDE_MODEL:
-        return CLAUDE_MODEL
-
-    # 3. Auto keyword routing
-    q_lower = question.lower()
-    for kw in _COMPLEX_KEYWORDS:
-        if kw in q_lower:
-            print(f"[DentAI] routing → Sonnet  (matched: '{kw}')")
-            return CLAUDE_MODEL_COMPLEX
-
-    print("[DentAI] routing → Haiku  (simple query)")
-    return CLAUDE_MODEL_SIMPLE
 
 _LANG_INSTRUCTION = {
     "en": (
@@ -2130,24 +2248,539 @@ _LANG_INSTRUCTION = {
     ),
 }
 
-def build_system_prompt(lang: str) -> str:
+def analyze_student_memory(current_session_id: str, max_sessions: int = 10) -> str:
+    """
+    Pull prior session questions and run a Haiku call to produce a structured
+    learning-profile analysis rather than dumping raw questions into the prompt.
+    This gives the agent actionable insight — recurring gaps, focus areas, what to reinforce.
+    """
+    try:
+        all_sessions = list_all_sessions()
+        prior_sessions = [s for s in all_sessions if s["id"] != current_session_id]
+
+        if not prior_sessions:
+            return ""
+
+        prior_questions = []
+        for sess in prior_sessions[-max_sessions:]:
+            exchanges = load_session(sess["id"])
+            for ex in exchanges:
+                q = ex.get("user", "").strip()
+                if q:
+                    prior_questions.append(q)
+
+        if not prior_questions:
+            return ""
+
+        questions_text = "\n".join(f"- {q}" for q in prior_questions[-25:])
+
+        # Haiku call: analyze patterns, don't just dump raw history
+        try:
+            analysis_resp = _create_with_retry(
+                anthropic_client,
+                model="claude-haiku-4-5-20251001",
+                max_tokens=250,
+                messages=[{
+                    "role": "user",
+                    "content": (
+                        f"A dental student has asked these questions in past study sessions:\n{questions_text}\n\n"
+                        "In 2–3 concise sentences: What are their recurring clinical focus areas? "
+                        "What knowledge gaps appear? What should their study assistant proactively reinforce?"
+                    ),
+                }],
+            )
+            analysis = analysis_resp.content[0].text.strip()
+        except Exception:
+            # Fallback: use raw list if Haiku call fails
+            analysis = f"This student has previously studied: {', '.join(set(prior_questions[-10:]))}."
+
+        return (
+            "\nSTUDENT LEARNING PROFILE (analyzed from prior sessions):\n"
+            f"{analysis}\n"
+            "Use this profile to tailor your responses — build on what they know, address recurring gaps, "
+            "and proactively connect new questions to prior topics where relevant.\n\n"
+        )
+    except Exception:
+        return ""
+
+
+def build_faculty_context(faculty_key: str) -> str:
+    """Return a faculty persona instruction block, or empty string for general mode."""
+    faculty = FACULTY.get(faculty_key, FACULTY["general"])
+    if not faculty["name"]:
+        return ""
+    return (
+        f"FACULTY MODE — {faculty['name']} ({faculty['specialty']}):\n"
+        f"You are responding in the clinical voice and style of {faculty['name']}. "
+        f"{faculty['style']}\n"
+        f"When citing materials, attribute them to {faculty['name']}'s curriculum where applicable. "
+        f"Respond as this faculty member would teach — with their clinical priorities and philosophy "
+        f"shaping how you frame every answer.\n\n"
+    )
+
+
+def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = "general") -> str:
     base = (
         "You are a clinical study assistant for a dental student at NSU College of Dental Medicine. "
         "You were built to help them review and apply their own school materials during clinical work and study. "
-        "The student is the clinician — you are their reference tool.\n\n"
-        "INSTRUCTIONS:\n"
-        "- Answer questions directly and clinically, drawing on any provided material excerpts AND your general dental knowledge.\n"
-        "- Material excerpts are a representative sample — they may not cover every aspect. Do NOT refuse to answer just because a specific detail is absent.\n"
-        "- When information comes from an excerpt, credit the file (e.g. 'According to your Fixed Pros notes…').\n"
-        "- When filling gaps from general knowledge, say so naturally.\n"
+        "The student is the clinician — you are their intelligent reference tool.\n\n"
+
+        "TOOL USE GUIDELINES:\n"
+        "- Always call search_documents before answering any clinical question.\n"
+        "- For complex or multi-part questions, call search_documents multiple times with different "
+        "focused sub-queries — do not rely on a single broad search.\n"
+        "- If the student's question is missing critical info that would materially change your answer "
+        "(tooth number, procedure type, material, key patient factors), call ask_clarification with ONE "
+        "targeted question. Do not ask if you can give a useful answer without it.\n"
+        "- When you have enough information, call provide_answer with the full response.\n"
+        "- Set needs_images=true in provide_answer for procedural or technique questions "
+        "(preps, instrumentation, step-by-step). Set needs_images=false for definitions, "
+        "pharmacology, and conceptual questions.\n"
+        "- If faculty mode is active, prefer calling search_documents with the matching faculty_tag.\n\n"
+
+        "CLINICAL ANSWER GUIDELINES:\n"
         "- Be specific: measurements, materials, sequences, clinical reasoning.\n"
-        "- Skip safety disclaimers — this tool exists to help the student think through cases.\n"
-        "- In follow-up questions, use the conversation history to give contextually aware answers; "
-        "do not re-introduce yourself or repeat context already established.\n"
-        "- Structure answers clearly: preparation guidelines, key specs, sequencing, common pitfalls — "
-        "but adapt the structure to what the question actually needs.\n\n"
+        "- When information comes from a source excerpt, credit the file "
+        "(e.g. 'According to your Fixed Pros notes…').\n"
+        "- When filling gaps from general dental knowledge, say so naturally.\n"
+        "- Skip safety disclaimers — this is a study tool for clinical students.\n"
+        "- In follow-up questions, use conversation history for context; do not re-introduce yourself.\n"
+        "- If the student's learning profile shows recurring topics or gaps, weave that awareness "
+        "into your response naturally.\n\n"
     )
-    return base + _LANG_INSTRUCTION[lang]
+    faculty_context = build_faculty_context(faculty_key)
+    return base + faculty_context + memory_context + _LANG_INSTRUCTION[lang]
+
+
+# ─── Query Logging + Topic Extraction ────────────────────────────────────────────
+
+QUERY_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "query_logs.json")
+
+# Dental topic taxonomy — keyword → topic label
+_TOPIC_TAXONOMY = {
+    "Restorative / Composites": [
+        "composite", "restoration", "class ii", "class iii", "class iv", "class v",
+        "resin", "bonding", "cavity", "caries", "dentin", "enamel", "flowable",
+        "incremental", "bulk fill", "icdas", "amalgam",
+    ],
+    "Crown & Bridge": [
+        "crown", "bridge", "fpd", "fixed partial", "zirconia", "porcelain",
+        "pfm", "all ceramic", "prep", "preparation", "margin", "finish line",
+        "provisional", "temporary", "cementation", "abutment", "retainer",
+        "prosthodontic", "fixed pros",
+    ],
+    "Endodontics": [
+        "root canal", "endodontic", "pulp", "pulpitis", "apex", "apical",
+        "periapical", "rct", "obturation", "gutta percha", "access", "endo",
+        "perforation", "resorption", "cracked tooth", "vertical root fracture",
+    ],
+    "Periodontics": [
+        "perio", "periodontal", "gingivitis", "gingival", "bone loss",
+        "pocket depth", "scaling", "root planing", "furcation", "attachment loss",
+        "calculus", "plaque", "supra", "subgingival", "charting", "probing",
+        "flap", "osseous", "regeneration",
+    ],
+    "Oral Surgery": [
+        "extraction", "surgery", "surgical", "impacted", "wisdom tooth",
+        "third molar", "incision", "flap design", "suture", "biopsy",
+        "pericoronitis", "alveolar", "dry socket", "osteitis",
+    ],
+    "Implants": [
+        "implant", "osseointegration", "implant placement", "sinus lift",
+        "bone graft", "titanium", "implant crown", "abutment implant",
+        "guided bone", "cbct implant",
+    ],
+    "Removable Prosthodontics": [
+        "denture", "partial denture", "rpd", "complete denture", "removable",
+        "occlusal rest", "clasp", "framework", "tooth selection", "impression",
+        "wax rim", "try-in",
+    ],
+    "Pharmacology / Medications": [
+        "drug", "medication", "antibiotic", "amoxicillin", "clindamycin",
+        "ibuprofen", "analgesic", "anesthesia", "anesthetic", "lidocaine",
+        "epinephrine", "prescription", "warfarin", "nsaid", "opioid",
+        "interaction", "contraindication", "dosage", "pharmacology",
+    ],
+    "Medical Conditions / Systemic": [
+        "diabetes", "diabetic", "hypertension", "cardiac", "heart", "warfarin",
+        "anticoagulant", "bisphosphonate", "pregnancy", "renal", "kidney",
+        "liver", "hiv", "immunocompromised", "blood thinner", "systemic",
+        "medical history", "endocarditis", "pacemaker", "asthma",
+    ],
+    "Radiology / Imaging": [
+        "radiograph", "x-ray", "xray", "cbct", "periapical film", "bitewing",
+        "panoramic", "radiolucent", "radiopaque", "j-shaped", "bone level",
+        "imaging",
+    ],
+    "Occlusion": [
+        "occlusion", "bite", "centric relation", "centric occlusion", "mip",
+        "crossbite", "overbite", "overjet", "bruxism", "parafunctional",
+        "articulator", "facebow", "tmj", "tmd", "occlusal scheme",
+    ],
+    "Materials Science": [
+        "material", "ceramic", "zirconia material", "lithium disilicate",
+        "e.max", "pvs", "polyvinyl", "impression material", "adhesive",
+        "cement", "resin cement", "glass ionomer", "handout gi", "flowable material",
+    ],
+    "Clinical Procedures / Technique": [
+        "rubber dam", "matrix", "sectional matrix", "wedge", "isolation",
+        "retraction cord", "temporization", "prep tip", "technique", "step",
+        "procedure", "protocol", "sequence", "how to", "steps",
+    ],
+    "Infection Control": [
+        "sterilization", "disinfection", "infection control", "ppe", "gloves",
+        "barrier", "autoclave", "cross contamination", "aseptic",
+    ],
+}
+
+def extract_topics(question: str) -> list:
+    """Map a student question to one or more dental topic labels."""
+    q = question.lower()
+    found = []
+    for topic, keywords in _TOPIC_TAXONOMY.items():
+        if any(kw in q for kw in keywords):
+            found.append(topic)
+    return found or ["General / Other"]
+
+
+def log_query(user_email: str, question: str, topics: list) -> None:
+    """
+    Persist a query log entry.
+    Local mode  → query_logs.json
+    Cloud mode  → Supabase query_logs table
+    """
+    entry = {
+        "user_email": user_email,
+        "question":   question[:500],   # truncate very long questions
+        "topics":     topics,
+        "timestamp":  datetime.now().isoformat(),
+    }
+
+    if IS_CLOUD:
+        try:
+            _get_supabase().table("query_logs").insert(entry).execute()
+        except Exception:
+            pass
+        return
+
+    # Local: append to JSON array
+    try:
+        if os.path.exists(QUERY_LOG_FILE):
+            with open(QUERY_LOG_FILE, "r", encoding="utf-8") as f:
+                logs = json.load(f)
+        else:
+            logs = []
+        logs.append(entry)
+        # Keep last 5000 entries
+        logs = logs[-5000:]
+        with open(QUERY_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump(logs, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+
+# ─── Clinical Database Handlers ──────────────────────────────────────────────────
+
+import json as _json
+import urllib.request
+import urllib.parse
+
+_CLINICAL_RULES_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "clinical_rules.json")
+
+@st.cache_data(ttl=3600)
+def _load_clinical_rules() -> list:
+    """Load clinical_rules.json once and cache."""
+    try:
+        with open(_CLINICAL_RULES_PATH, "r", encoding="utf-8") as f:
+            return _json.load(f).get("rules", [])
+    except Exception:
+        return []
+
+
+def _tool_clinical_guideline(condition: str, procedure: str = "") -> str:
+    """
+    Search the local clinical rules database by keyword matching.
+    Returns formatted guidance text, or a not-found message.
+    """
+    rules = _load_clinical_rules()
+    if not rules:
+        return "Clinical rules database unavailable."
+
+    condition_lower = condition.lower()
+    procedure_lower = procedure.lower()
+
+    matched = []
+    for rule in rules:
+        score = 0
+        # Match against condition keywords
+        for kw in rule.get("keywords", []):
+            if kw in condition_lower or (procedure_lower and kw in procedure_lower):
+                score += 2
+        # Match condition field directly
+        if any(w in rule.get("condition", "").lower() for w in condition_lower.split()):
+            score += 1
+        # Match procedure field if provided
+        if procedure_lower:
+            for proc in rule.get("procedures", []):
+                if any(w in proc for w in procedure_lower.split()):
+                    score += 1
+        if score > 0:
+            matched.append((score, rule))
+
+    if not matched:
+        return (
+            f"No specific clinical guideline found for '{condition}' in the database. "
+            "Use your general dental knowledge and NSU materials to guide the answer."
+        )
+
+    matched.sort(key=lambda x: x[0], reverse=True)
+    top = matched[:3]  # Return up to 3 most relevant rules
+
+    output_parts = [f"CLINICAL GUIDELINES — {condition.upper()}:\n"]
+    for _, rule in top:
+        severity_labels = {
+            "contraindicated":      "🔴 CONTRAINDICATED",
+            "caution":              "🟡 CAUTION",
+            "modification_required":"🟠 MODIFICATION REQUIRED",
+            "prophylaxis_required": "🔵 PROPHYLAXIS REQUIRED",
+        }
+        severity = severity_labels.get(rule.get("severity", "caution"), "⚠️ CAUTION")
+        output_parts.append(
+            f"{severity} — {rule['condition'].title()}\n"
+            f"Recommendation: {rule['recommendation']}\n"
+            f"Source: {rule.get('source', 'ADA guidelines')}\n"
+        )
+
+    return "\n".join(output_parts)
+
+
+def _tool_drug_interactions(drugs: list) -> str:
+    """
+    Look up drug interactions via the NIH RxNav API (free, no key required).
+    Falls back to a clear error message if the API is unavailable.
+    """
+    if not drugs:
+        return "No drugs specified."
+
+    results = []
+
+    for drug_name in drugs[:4]:  # limit to 4 drugs per call
+        try:
+            # Step 1: resolve drug name → RxCUI
+            encoded = urllib.parse.quote(drug_name.strip())
+            rxcui_url = f"https://rxnav.nlm.nih.gov/REST/rxcui.json?name={encoded}&search=1"
+            with urllib.request.urlopen(rxcui_url, timeout=5) as resp:
+                rxcui_data = _json.loads(resp.read().decode())
+
+            rxcuis = (
+                rxcui_data.get("idGroup", {}).get("rxnormId", [])
+            )
+            if not rxcuis:
+                results.append(f"• {drug_name}: not found in RxNorm database.")
+                continue
+
+            rxcui = rxcuis[0]
+
+            # Step 2: get interactions for this RxCUI
+            interact_url = (
+                f"https://rxnav.nlm.nih.gov/REST/interaction/interaction.json"
+                f"?rxcui={rxcui}&sources=DrugBank"
+            )
+            with urllib.request.urlopen(interact_url, timeout=5) as resp:
+                interact_data = _json.loads(resp.read().decode())
+
+            interaction_pairs = interact_data.get("interactionTypeGroup", [])
+            if not interaction_pairs:
+                results.append(f"• {drug_name} (RxCUI {rxcui}): No significant interactions found in DrugBank.")
+                continue
+
+            drug_results = [f"• {drug_name} interactions:"]
+            count = 0
+            for group in interaction_pairs:
+                for itype in group.get("interactionType", []):
+                    for pair in itype.get("interactionPair", []):
+                        if count >= 5:  # limit results per drug
+                            break
+                        desc = pair.get("description", "")
+                        severity = pair.get("severity", "")
+                        drugs_involved = " + ".join(
+                            c.get("minConceptItem", {}).get("name", "")
+                            for c in pair.get("interactionConcept", [])
+                        )
+                        if desc:
+                            drug_results.append(
+                                f"  – {drugs_involved}: {desc}"
+                                + (f" [{severity}]" if severity else "")
+                            )
+                            count += 1
+
+            results.append("\n".join(drug_results))
+
+        except Exception as e:
+            results.append(
+                f"• {drug_name}: Could not retrieve interaction data (API unavailable). "
+                "Use clinical judgment and consult a current drug reference."
+            )
+
+    if not results:
+        return "No drug interaction data retrieved."
+
+    return (
+        "DRUG INTERACTION LOOKUP (NIH RxNav / DrugBank):\n\n"
+        + "\n\n".join(results)
+        + "\n\nNote: Always verify with a current drug reference and clinical judgment."
+    )
+
+
+# ─── Agent Loop ──────────────────────────────────────────────────────────────────
+
+def run_agent(
+    question: str,
+    history: list,
+    memory_ctx: str,
+    faculty_key: str,
+    lang: str,
+) -> tuple:
+    """
+    Run the agentic tool-use loop.
+
+    Claude decides:
+      - how many times to call search_documents (and with what queries)
+      - whether to ask a clarifying question first
+      - when to call provide_answer (and whether images are needed)
+
+    Returns:
+        (answer, sources, retrieved_nodes, clarification_question)
+        - answer: str | None  (None if clarification was requested)
+        - sources: list[str]
+        - retrieved_nodes: list  (for image extraction)
+        - clarification_question: str | None
+    """
+    from config import CLAUDE_MODEL_COMPLEX
+
+    index = load_index()
+    retriever = index.as_retriever(similarity_top_k=20)
+
+    # Build message thread from session history
+    messages = []
+    for ex in history:
+        messages.append({"role": "user",      "content": ex.get("user_ctx", ex["user"])})
+        messages.append({"role": "assistant", "content": ex["assistant"]})
+    messages.append({"role": "user", "content": question})
+
+    system = build_system_prompt(lang, memory_ctx, faculty_key)
+
+    all_sources: list  = []
+    retrieved_nodes: list = []
+
+    # Tool-use loop — continue until provide_answer or ask_clarification is called
+    for _iteration in range(8):   # safety cap
+        response = _create_with_retry(
+            anthropic_client,
+            model=CLAUDE_MODEL_COMPLEX,
+            max_tokens=4000,
+            system=system,
+            tools=TOOLS,
+            messages=messages,
+        )
+
+        # If Claude finished without calling a tool, extract any text and return
+        if response.stop_reason == "end_turn":
+            text = " ".join(
+                b.text for b in response.content if hasattr(b, "text")
+            ).strip()
+            return text or "I wasn't able to generate a response. Please try again.", all_sources, retrieved_nodes, None
+
+        if response.stop_reason != "tool_use":
+            break
+
+        # Append Claude's response to the thread
+        messages.append({"role": "assistant", "content": response.content})
+
+        tool_results = []
+        terminal = False
+
+        for block in response.content:
+            if not hasattr(block, "type") or block.type != "tool_use":
+                continue
+
+            if block.name == "search_documents":
+                query      = block.input.get("query", question)
+                n          = min(int(block.input.get("n", 8)), 20)
+                faculty_tag = block.input.get("faculty_tag")
+
+                nodes = retriever.retrieve(query)
+
+                # Faculty corpus filtering — fall back gracefully if no tagged docs found
+                if faculty_tag:
+                    tagged = [
+                        node for node in nodes
+                        if (
+                            node.metadata.get("corpus_tag") == faculty_tag
+                            or faculty_tag.lower() in node.metadata.get("file_name", "").lower()
+                        )
+                    ]
+                    nodes = tagged if tagged else nodes
+
+                nodes = nodes[:n]
+                retrieved_nodes.extend(nodes)
+
+                context = ""
+                for node in nodes:
+                    fname = node.metadata.get("file_name", "Unknown source")
+                    context += f"--- Excerpt from: {fname} ---\n{node.text}\n\n"
+                    if node.metadata.get("file_name"):
+                        all_sources.append(node.metadata["file_name"])
+
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     context or "No relevant materials found for that query.",
+                })
+
+            elif block.name == "query_drug_interactions":
+                drugs = block.input.get("drugs", [])
+                result = _tool_drug_interactions(drugs)
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     result,
+                })
+
+            elif block.name == "get_clinical_guideline":
+                condition = block.input.get("condition", "")
+                procedure = block.input.get("procedure", "")
+                result = _tool_clinical_guideline(condition, procedure)
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     result,
+                })
+
+            elif block.name == "ask_clarification":
+                clarification_q = block.input.get("question", "")
+                return None, [], [], clarification_q
+
+            elif block.name == "provide_answer":
+                answer      = block.input.get("answer", "")
+                needs_images = block.input.get("needs_images", True)
+                sources     = block.input.get("sources", all_sources)
+                # Merge declared sources with accumulated ones
+                all_sources = list(dict.fromkeys(sources + all_sources))
+                final_nodes = retrieved_nodes if needs_images else []
+                terminal = True
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     "Answer delivered.",
+                })
+                messages.append({"role": "user", "content": tool_results})
+                return answer, all_sources, final_nodes, None
+
+        if not terminal:
+            messages.append({"role": "user", "content": tool_results})
+
+    return "I wasn't able to complete that request. Please try again.", all_sources, retrieved_nodes, None
 
 
 # ─── Hero Section ────────────────────────────────────────────────────────────────
@@ -2321,8 +2954,23 @@ if _has_history:
         render_response(exchange["assistant"], exchange["sources"], imgs, exchange.get("model", ""))
 
 
+# ─── Pending Clarification Display ───────────────────────────────────────────────
+# When the agent needs more info, show its question as an assistant bubble
+# so the student knows to answer it in the next chat input.
+if "pending_clarification" in st.session_state:
+    _clarification_q = st.session_state.pop("pending_clarification")
+    st.markdown(
+        "<div class='response-card' style='border-left-color:#FDB913;'>"
+        "<div class='response-header'>"
+        "<span class='response-badge' style='background:linear-gradient(135deg,#7b5ea7,#9b7ec7);'>🤔 Clarification Needed</span>"
+        "</div>"
+        f"<p style='color:#1e293b;font-size:0.97rem;line-height:1.7;margin:0;'>{_clarification_q}</p>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
 # ─── Fixed-bottom chat input (native Streamlit) ───────────────────────────────────
-_placeholder = _t["placeholder_followup"] if _has_history else _t["placeholder_new"]
+_placeholder = _t["placeholder_followup"] if (_has_history or "pending_original_question" in st.session_state) else _t["placeholder_new"]
 case_input = st.chat_input(_placeholder)
 
 
@@ -2347,44 +2995,27 @@ if case_input:
             unsafe_allow_html=True
         )
 
-    # ── Retrieve context ──
-    index = load_index()
-    retriever = index.as_retriever(similarity_top_k=20)
-    relevant_nodes = retriever.retrieve(case_input)
+    # ── If student is answering a clarification, prepend original question ──
+    if "pending_original_question" in st.session_state:
+        full_question = (
+            f"{st.session_state.pending_original_question}\n\n"
+            f"[Student clarified: {case_input}]"
+        )
+        del st.session_state["pending_original_question"]
+    else:
+        full_question = case_input
 
-    context = ""
-    sources = []
-    for node in relevant_nodes:
-        fname = node.metadata.get("file_name", "Unknown source")
-        context += f"--- Excerpt from: {fname} ---\n{node.text}\n\n"
-        if node.metadata.get("file_name"):
-            sources.append(node.metadata["file_name"])
-
-    # ── Build user message with context ──
-    user_ctx = (
-        f"Relevant excerpts from my NSU dental school materials:\n\n{context}\n"
-        f"My question / patient case:\n{case_input}"
-    )
-
-    # ── Build full message thread (history + current) ──
-    # user_ctx holds the full PDF-augmented prompt; fall back to plain question
-    # for exchanges loaded from cache (where user_ctx wasn't saved to save space)
-    api_messages = []
-    for ex in st.session_state.chat_history:
-        api_messages.append({"role": "user",      "content": ex.get("user_ctx", ex["user"])})
-        api_messages.append({"role": "assistant", "content": ex["assistant"]})
-    api_messages.append({"role": "user", "content": user_ctx})
-
-    # ── Route to the right model based on question complexity ──
-    selected_model = route_model(case_input)
+    # ── Build longitudinal memory profile (Haiku-analyzed) ──
+    memory_ctx  = analyze_student_memory(st.session_state.current_session_id)
+    faculty_key = st.session_state.get("faculty_key", "general")
 
     try:
-        response = _create_with_retry(
-            anthropic_client,
-            model=selected_model,
-            max_tokens=2500,
-            system=build_system_prompt(st.session_state.lang),
-            messages=api_messages
+        assistant_text, sources, relevant_nodes, clarification_q = run_agent(
+            question    = full_question,
+            history     = st.session_state.chat_history,
+            memory_ctx  = memory_ctx,
+            faculty_key = faculty_key,
+            lang        = st.session_state.lang,
         )
     except Exception as e:
         _loader.empty()
@@ -2393,24 +3024,37 @@ if case_input:
         else:
             st.error(f"An error occurred: {e}")
         st.stop()
-    assistant_text = response.content[0].text
 
     _loader.empty()
 
-    # ── Extract images (stored in session state for display) ──
-    page_images, _ = extract_page_images(relevant_nodes, max_images=5)
+    # ── Agent asked a clarifying question — display it and wait ──
+    if clarification_q:
+        st.session_state["pending_original_question"] = case_input
+        st.session_state["pending_clarification"]     = clarification_q
+        st.rerun()
+
+    # ── Extract images only when the agent flagged them as useful ──
+    if relevant_nodes:
+        page_images, _ = extract_page_images(relevant_nodes, max_images=5)
+    else:
+        page_images = []
     st.session_state.latest_images = page_images
 
-    # ── Save exchange to history + persist to disk ──
+    # ── Save exchange to history + persist ──
     st.session_state.chat_history.append({
         "user":      case_input,
-        "user_ctx":  user_ctx,        # kept in memory for API threading
+        "user_ctx":  full_question,   # kept in memory for API threading
         "assistant": assistant_text,
         "sources":   sources,
-        "model":     selected_model,
+        "model":     "agent/sonnet",
         "timestamp": datetime.now().isoformat(),
     })
     save_session(st.session_state.current_session_id, st.session_state.chat_history)
+
+    # ── Log query for faculty insights report ──
+    _topics = extract_topics(case_input)
+    log_query(_current_user_email(), case_input, _topics)
+
     st.rerun()
 
 
@@ -2506,6 +3150,28 @@ with st.sidebar:
                                 st.query_params["load_sess"]        = _del_new_id
                             delete_session(sess["id"])
                             st.rerun()
+
+    st.markdown("<hr>", unsafe_allow_html=True)
+
+    # ── Faculty selector ─────────────────────────────────────────────────────────
+    st.markdown(
+        "<p style='color:#FDB913;font-size:0.85rem;font-weight:700;"
+        "letter-spacing:0.3px;margin:0 0 8px 0;'>👨‍⚕️ Learn From</p>",
+        unsafe_allow_html=True
+    )
+    _faculty_options = {v["label"]: k for k, v in FACULTY.items()}
+    _current_faculty_key = st.session_state.get("faculty_key", "general")
+    _current_faculty_label = next(
+        (v["label"] for k, v in FACULTY.items() if k == _current_faculty_key),
+        FACULTY["general"]["label"]
+    )
+    _faculty_choice = st.radio(
+        "faculty_selector",
+        options=list(_faculty_options.keys()),
+        index=list(_faculty_options.keys()).index(_current_faculty_label),
+        label_visibility="collapsed",
+    )
+    st.session_state.faculty_key = _faculty_options[_faculty_choice]
 
     st.markdown("<hr>", unsafe_allow_html=True)
 
