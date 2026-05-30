@@ -466,7 +466,8 @@ def show_sidebar():
 
         for label in pages:
             active = st.session_state.get("page") == label
-            st.markdown(f"<div class='{'nav-active' if active else ''}'>", unsafe_allow_html=True)
+            css_class = "nav-active" if active else ""
+            st.markdown(f"<div class='{css_class}'>", unsafe_allow_html=True)
             if st.button(label, key=f"nav_{label}", use_container_width=True):
                 st.session_state["page"] = label
                 st.rerun()
