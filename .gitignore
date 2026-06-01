@@ -15,3 +15,7 @@ documents/
 
 # Streamlit secrets — never commit these
 .streamlit/secrets.toml
+
+# Python virtual environment
+venv/
+.venv/

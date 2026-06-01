@@ -37,6 +37,10 @@ from llama_index.core import StorageContext
 
 # ─── Config (controls local vs cloud mode) ───────────────────────────────────
 from config import IS_LOCAL, IS_CLOUD, CHROMA_PATH, CHROMA_COLLECTION
+from agents import (
+    get_mode_prompt, get_mode_meta, mode_keys, mode_labels, DEFAULT_MODE, AGENT_MODES,
+    CLINICAL_DEPARTMENTS, DEFAULT_DEPARTMENT, get_department_context,
+)
 
 # Local-only imports
 if IS_LOCAL:
@@ -404,6 +408,10 @@ if "latest_images" not in st.session_state:
     st.session_state.latest_images = []  # images from the most recent response only
 if "lang" not in st.session_state:
     st.session_state.lang = "en"         # "en" or "es"
+if "agent_mode" not in st.session_state:
+    st.session_state.agent_mode = DEFAULT_MODE
+if "clinical_dept" not in st.session_state:
+    st.session_state.clinical_dept = DEFAULT_DEPARTMENT
 
 # Keep the URL in sync so browser refresh restores the current session
 st.query_params["load_sess"] = st.session_state.current_session_id
@@ -2073,8 +2081,9 @@ TOOLS = [
                 "faculty_tag": {
                     "type": "string",
                     "description": (
-                        "Filter results to a specific faculty member's materials. "
-                        "Options: 'abuna' (Restorative/Biomimetics), 'bendayan' (Fixed Prosthodontics). "
+                        "Filter results to a specific corpus. "
+                        "Options: 'abuna' (Restorative/Biomimetics), 'bendayan' (Fixed Prosthodontics), "
+                        "'adex' (ADEX board exam practice materials). "
                         "Omit for a general search across all materials."
                     ),
                 },
@@ -2233,6 +2242,19 @@ TOOLS = [
     },
 ]
 
+# ─── ADEX Tool Extension (web search — ADEX mode only) ───────────────────────────
+# Anthropic's native web_search_20250305 tool is server-side: Anthropic executes the
+# search and returns results automatically in the tool-use loop. No external API key needed.
+# Only injected into the tool list when agent_mode == "adex".
+
+_WEB_SEARCH_TOOL = {
+    "type": "web_search_20250305",
+    "name": "web_search",
+    "max_uses": 5,
+}
+
+TOOLS_ADEX = TOOLS + [_WEB_SEARCH_TOOL]
+
 # ─── Faculty + Language helpers ──────────────────────────────────────────────────
 # (Model routing is now handled inside run_agent — Sonnet for agent orchestration,
 #  Haiku for the memory pre-analysis step. The sidebar "AI Model" selector is kept
@@ -2377,19 +2399,25 @@ def build_faculty_context(faculty_key: str) -> str:
 
 
 def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = "general",
-                        has_image: bool = False) -> str:
+                        has_image: bool = False, agent_mode: str = "direct",
+                        clinical_dept: str = "general") -> str:
     base = (
         "You are a clinical study assistant for a dental student at NSU College of Dental Medicine. "
         "You were built to help them review and apply their own school materials during clinical work and study. "
         "The student is the clinician — you are their intelligent reference tool.\n\n"
 
-        "TOOL USE GUIDELINES:\n"
-        "- Always call search_documents before answering any clinical question.\n"
+        "AGENTIC TOOL USE GUIDELINES:\n"
+        "- Reason from your clinical knowledge first. Reach for tools deliberately, not reflexively.\n"
+        "- Call search_documents when the question requires NSU-curriculum-specific content "
+        "(a particular prep design, faculty protocol, school-specific material or technique) "
+        "or when ADEX exam material would strengthen a board-practice explanation. "
+        "Do not search for general clinical knowledge you already have.\n"
         "- For complex or multi-part questions, call search_documents multiple times with different "
-        "focused sub-queries — do not rely on a single broad search.\n"
-        "- If the student's question is missing critical info that would materially change your answer "
-        "(tooth number, procedure type, material, key patient factors), call ask_clarification with ONE "
-        "targeted question. Do not ask if you can give a useful answer without it.\n"
+        "focused sub-queries rather than one broad search.\n"
+        "- Call query_drug_interactions or get_clinical_guideline when a specific drug class or "
+        "medical condition is central to the clinical decision.\n"
+        "- Call ask_clarification only when a missing detail (tooth number, procedure type, material, "
+        "key patient factor) would materially change your answer. Not as a default.\n"
         "- When you have enough information, call provide_answer with the full response.\n"
         "- Set needs_images=true in provide_answer for procedural or technique questions "
         "(preps, instrumentation, step-by-step). Set needs_images=false for definitions, "
@@ -2433,7 +2461,9 @@ def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = 
         )
 
     faculty_context = build_faculty_context(faculty_key)
-    return base + radiograph_guidance + faculty_context + memory_context + _LANG_INSTRUCTION[lang]
+    dept_context    = get_department_context(clinical_dept)
+    mode_context    = get_mode_prompt(agent_mode)
+    return base + radiograph_guidance + dept_context + faculty_context + memory_context + mode_context + _LANG_INSTRUCTION[lang]
 
 
 # ─── Query Logging + Topic Extraction ────────────────────────────────────────────
@@ -2843,6 +2873,8 @@ def run_agent(
     lang: str,
     image_bytes: bytes = None,
     image_media_type: str = "image/jpeg",
+    agent_mode: str = "direct",
+    clinical_dept: str = "general",
 ) -> tuple:
     """
     Run the agentic tool-use loop.
@@ -2892,20 +2924,24 @@ def run_agent(
     else:
         messages.append({"role": "user", "content": question})
 
-    system = build_system_prompt(lang, memory_ctx, faculty_key, has_image=bool(image_bytes))
+    system = build_system_prompt(lang, memory_ctx, faculty_key, has_image=bool(image_bytes),
+                                 agent_mode=agent_mode, clinical_dept=clinical_dept)
 
     all_sources: list     = []
     retrieved_nodes: list = []
     annotated_image: bytes = None   # set when annotate_image tool is called
 
+    # Select tool list based on agent mode — ADEX gets web search on top
+    active_tools = TOOLS_ADEX if agent_mode == "adex" else TOOLS
+
     # Tool-use loop — continue until provide_answer or ask_clarification is called
-    for _iteration in range(8):   # safety cap
+    for _iteration in range(10):   # slightly higher cap for ADEX (web search adds turns)
         response = _create_with_retry(
             anthropic_client,
             model=CLAUDE_MODEL_COMPLEX,
             max_tokens=4000,
             system=system,
-            tools=TOOLS,
+            tools=active_tools,
             messages=messages,
         )
 
@@ -2996,6 +3032,17 @@ def run_agent(
                     "type":        "tool_result",
                     "tool_use_id": block.id,
                     "content":     result,
+                })
+
+            elif block.name == "web_search":
+                # Anthropic's native web search — results are returned by the API
+                # as a tool_result content block automatically. We just need to pass
+                # an acknowledgement back so the loop continues.
+                query = block.input.get("query", "")
+                tool_results.append({
+                    "type":        "tool_result",
+                    "tool_use_id": block.id,
+                    "content":     f"Web search executed for: {query}",
                 })
 
             elif block.name == "ask_clarification":
@@ -3340,6 +3387,8 @@ if case_input:
             lang             = st.session_state.lang,
             image_bytes      = _image_bytes,
             image_media_type = _image_media_type,
+            agent_mode       = st.session_state.get("agent_mode", "direct"),
+            clinical_dept    = st.session_state.get("clinical_dept", "general"),
         )
     except Exception as e:
         _loader.empty()
@@ -3408,6 +3457,101 @@ with st.sidebar:
         st.session_state.latest_images      = []
         st.query_params["load_sess"]        = _new_id
         st.rerun()
+
+    # ── Clinical Department Selector ─────────────────────────────────────────────
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(
+        "<p style='color:#FDB913;font-size:0.85rem;font-weight:700;"
+        "letter-spacing:0.3px;margin:0 0 6px 0;'>🏥 Today's Clinic</p>",
+        unsafe_allow_html=True,
+    )
+
+    _current_dept    = st.session_state.get("clinical_dept", "general")
+    _dept_keys       = list(CLINICAL_DEPARTMENTS.keys())
+    _dept_labels     = [d["label"] for d in CLINICAL_DEPARTMENTS.values()]
+    _dept_idx        = _dept_keys.index(_current_dept)
+
+    # Show active department as a compact highlighted chip
+    _active_dept     = CLINICAL_DEPARTMENTS[_current_dept]
+    st.markdown(
+        f"<div style='background:rgba(253,185,19,0.12);border:1.5px solid rgba(253,185,19,0.55);"
+        f"border-radius:8px;padding:7px 11px;margin-bottom:8px;display:flex;align-items:center;gap:7px;'>"
+        f"<span style='font-size:1rem;'>{_active_dept['icon']}</span>"
+        f"<span style='color:#FDB913;font-size:0.82rem;font-weight:700;'>{_active_dept['short']}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # Dropdown to switch
+    _selected_dept_label = st.selectbox(
+        "Switch clinic",
+        options=_dept_labels,
+        index=_dept_idx,
+        label_visibility="collapsed",
+    )
+    _selected_dept = _dept_keys[_dept_labels.index(_selected_dept_label)]
+    if _selected_dept != _current_dept:
+        st.session_state.clinical_dept = _selected_dept
+        st.rerun()
+
+    # ── Learning Mode Selector ───────────────────────────────────────────────────
+    st.markdown("<hr>", unsafe_allow_html=True)
+    st.markdown(
+        "<p style='color:#FDB913;font-size:0.85rem;font-weight:700;"
+        "letter-spacing:0.3px;margin:0 0 8px 0;'>📚 Learning Mode</p>",
+        unsafe_allow_html=True,
+    )
+
+    _current_mode = st.session_state.get("agent_mode", "direct")
+
+    for _mk, _mm in AGENT_MODES.items():
+        _is_active = (_mk == _current_mode)
+
+        if _is_active:
+            # Active mode — gold card, no button
+            st.markdown(
+                f"<div style='"
+                f"background:rgba(253,185,19,0.15);"
+                f"border:1.5px solid rgba(253,185,19,0.70);"
+                f"border-radius:10px;padding:10px 12px;margin-bottom:6px;'>"
+                f"<div style='display:flex;align-items:center;gap:7px;'>"
+                f"<span style='font-size:1.05rem;'>{_mm['icon']}</span>"
+                f"<span style='color:#FDB913;font-size:0.84rem;font-weight:700;'>{_mm['short']}</span>"
+                f"<span style='margin-left:auto;background:rgba(253,185,19,0.25);"
+                f"color:#FDB913;font-size:0.62rem;font-weight:700;letter-spacing:0.5px;"
+                f"text-transform:uppercase;padding:2px 7px;border-radius:20px;'>Active</span>"
+                f"</div>"
+                f"<div style='color:rgba(253,185,19,0.80);font-size:0.72rem;"
+                f"line-height:1.4;margin-top:4px;padding-left:27px;'>"
+                f"{_mm['description']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            # Inactive mode — dimmer card + switch button
+            st.markdown(
+                f"<div style='"
+                f"background:rgba(255,255,255,0.04);"
+                f"border:1px solid rgba(255,255,255,0.10);"
+                f"border-radius:10px;padding:10px 12px;margin-bottom:4px;'>"
+                f"<div style='display:flex;align-items:center;gap:7px;'>"
+                f"<span style='font-size:1.05rem;opacity:0.7;'>{_mm['icon']}</span>"
+                f"<span style='color:rgba(255,255,255,0.75);font-size:0.84rem;font-weight:600;'>"
+                f"{_mm['short']}</span>"
+                f"</div>"
+                f"<div style='color:rgba(255,255,255,0.45);font-size:0.72rem;"
+                f"line-height:1.4;margin-top:3px;padding-left:27px;'>"
+                f"{_mm['description']}</div>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(f"Switch to {_mm['short']}", key=f"mode_btn_{_mk}",
+                         use_container_width=True):
+                st.session_state.agent_mode = _mk
+                st.session_state.chat_history        = []
+                st.session_state.current_session_id  = new_session_id()
+                st.session_state.latest_images       = []
+                st.rerun()
 
     # ── Past sessions browser ────────────────────────────────────────────────────
     _all_sessions = list_all_sessions()
