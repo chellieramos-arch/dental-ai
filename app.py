@@ -210,11 +210,14 @@ def list_all_sessions() -> list:
 def new_session_id() -> str:
     return datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
-# ─── Supabase Email OTP Login Gate (cloud mode only) ─────────────────────────
-# Students enter their NSU email → receive a 6-digit code → enter it → done.
-# No Azure, no passwords, no IT department required.
+# ─── Supabase Auth Gate (cloud mode only) ────────────────────────────────────
+# Two flows: Log In (email + password) and Create Account (signup with profile).
+# Domain restriction: only NSU email addresses are accepted.
 
 _NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
+
+_PROGRAM_YEAR_OPTIONS = ["D1", "D2", "D3", "D4", "Resident", "Faculty", "Staff", "Other"]
+_ROLE_OPTIONS         = ["student", "faculty", "admin"]
 
 def _is_nsu_email(email: str) -> bool:
     return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
@@ -279,6 +282,32 @@ if IS_CLOUD and "user_email" not in st.session_state:
       }
       [data-testid="stTextInput"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
 
+      /* selectbox */
+      [data-testid="stSelectbox"] > div > div {
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        color: var(--text) !important;
+      }
+      [data-testid="stSelectbox"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
+
+      /* tabs */
+      [data-testid="stTabs"] [data-baseweb="tab-list"] {
+        background: transparent !important;
+        border-bottom: 1px solid var(--border) !important;
+        margin-bottom: 1.5rem;
+      }
+      [data-testid="stTabs"] [data-baseweb="tab"] {
+        color: var(--muted) !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+        padding: 10px 20px !important;
+      }
+      [data-testid="stTabs"] [aria-selected="true"] {
+        color: var(--cyan) !important;
+        border-bottom: 2px solid var(--cyan) !important;
+      }
+
       /* primary button */
       .stButton > button[kind="primary"] {
         background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
@@ -322,61 +351,129 @@ if IS_CLOUD and "user_email" not in st.session_state:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         sb = _get_supabase()
+        tab_login, tab_signup = st.tabs(["Log In", "Create Account"])
 
-        # ── Step 1: collect email and send OTP code ───────────────────────────
-        if "otp_sent_to" not in st.session_state:
-            email_input = st.text_input(
-                "NSU Email Address",
-                placeholder="yourname@mynsu.nova.edu",
-                label_visibility="collapsed",
+        # ── Log In tab ────────────────────────────────────────────────────────
+        with tab_login:
+            login_email = st.text_input(
+                "NSU Email", placeholder="yourname@mynsu.nova.edu",
+                key="login_email",
             )
-            if st.button("Send Login Code", use_container_width=True, type="primary"):
-                email_input = email_input.strip().lower()
-                if not email_input:
-                    st.error("Please enter your NSU email address.")
-                elif not _is_nsu_email(email_input):
-                    st.error("Please use your NSU email address (@mynsu.nova.edu or @nova.edu).")
+            login_pw = st.text_input(
+                "Password", type="password", placeholder="Your password",
+                key="login_pw",
+            )
+            if st.button("Log In", use_container_width=True, type="primary", key="btn_login"):
+                _email = login_email.strip().lower()
+                _pw    = login_pw.strip()
+                if not _email or not _pw:
+                    st.error("Please enter your email and password.")
+                elif not _is_nsu_email(_email):
+                    st.error("Please use your NSU email (@mynsu.nova.edu, @nova.edu, or @health.snova.edu).")
                 else:
                     try:
-                        sb.auth.sign_in_with_otp({"email": email_input})
-                        st.session_state.otp_sent_to = email_input
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"Could not send code. Please try again. ({e})")
-
-        # ── Step 2: user enters the numeric code from their email ─────────────
-        else:
-            sent_to = st.session_state.otp_sent_to
-            st.info(f"A login code was sent to **{sent_to}**. Check your Outlook inbox and enter the code below.")
-            code_input = st.text_input(
-                "Login Code",
-                placeholder="Enter the code from your email",
-                label_visibility="collapsed",
-                max_chars=8,
-            )
-            if st.button("Verify Code", use_container_width=True, type="primary"):
-                code_input = code_input.strip()
-                if not code_input:
-                    st.error("Please enter the code from your email.")
-                else:
-                    try:
-                        resp = sb.auth.verify_otp({
-                            "email": sent_to,
-                            "token": code_input,
-                            "type": "email",
-                        })
+                        resp = sb.auth.sign_in_with_password({"email": _email, "password": _pw})
                         st.session_state.user_email = resp.user.email
-                        # Store access token in URL so page refresh restores the session
                         if resp.session and resp.session.access_token:
                             st.query_params["s"] = resp.session.access_token
-                        if "otp_sent_to" in st.session_state:
-                            del st.session_state.otp_sent_to
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Invalid or expired code. Please try again. ({e})")
-            if st.button("Use a different email", use_container_width=True):
-                del st.session_state.otp_sent_to
-                st.rerun()
+                        st.error(f"Login failed. Check your email and password. ({e})")
+
+            st.markdown(
+                "<p style='text-align:center;font-size:0.8rem;color:#7a90b0;margin-top:12px;'>"
+                "Forgot your password? Use the <b>Create Account</b> tab to reset via a new signup, "
+                "or contact your program administrator."
+                "</p>",
+                unsafe_allow_html=True,
+            )
+
+        # ── Create Account tab ────────────────────────────────────────────────
+        with tab_signup:
+            su_email = st.text_input(
+                "NSU Email", placeholder="yourname@mynsu.nova.edu",
+                key="su_email",
+            )
+            su_pw = st.text_input(
+                "Password", type="password",
+                placeholder="At least 8 characters",
+                key="su_pw",
+            )
+            su_pw2 = st.text_input(
+                "Confirm Password", type="password",
+                placeholder="Repeat your password",
+                key="su_pw2",
+            )
+            su_name = st.text_input(
+                "Full Name", placeholder="First Last",
+                key="su_name",
+            )
+            su_school_id = st.text_input(
+                "Student / Faculty ID", placeholder="NSU-issued ID number",
+                key="su_school_id",
+            )
+
+            role_col, year_col = st.columns(2)
+            with role_col:
+                su_role = st.selectbox(
+                    "Role", options=_ROLE_OPTIONS,
+                    key="su_role",
+                )
+            with year_col:
+                su_year = st.selectbox(
+                    "Program / Year", options=_PROGRAM_YEAR_OPTIONS,
+                    key="su_year",
+                )
+
+            if st.button("Create Account", use_container_width=True, type="primary", key="btn_signup"):
+                _email = su_email.strip().lower()
+                _pw    = su_pw.strip()
+                _pw2   = su_pw2.strip()
+                _name  = su_name.strip()
+                _sid   = su_school_id.strip()
+
+                # Validation
+                if not all([_email, _pw, _pw2, _name, _sid]):
+                    st.error("Please fill in all fields.")
+                elif not _is_nsu_email(_email):
+                    st.error("Please use your NSU email (@mynsu.nova.edu, @nova.edu, or @health.snova.edu).")
+                elif len(_pw) < 8:
+                    st.error("Password must be at least 8 characters.")
+                elif _pw != _pw2:
+                    st.error("Passwords do not match.")
+                else:
+                    try:
+                        # 1. Create the auth user
+                        resp = sb.auth.sign_up({"email": _email, "password": _pw})
+                        _user = resp.user
+
+                        if _user:
+                            # 2. Insert the profile row
+                            sb.table("profiles").insert({
+                                "id":           _user.id,
+                                "email":        _email,
+                                "full_name":    _name,
+                                "school_id":    _sid,
+                                "role":         su_role,
+                                "program_year": su_year,
+                            }).execute()
+
+                            # 3. Log in immediately if session returned (email confirmation off)
+                            if resp.session and resp.session.access_token:
+                                st.session_state.user_email = _user.email
+                                st.query_params["s"] = resp.session.access_token
+                                st.rerun()
+                            else:
+                                # Email confirmation is enabled in Supabase — ask user to verify
+                                st.success(
+                                    f"Account created! Check **{_email}** for a confirmation link, "
+                                    "then return here to log in."
+                                )
+                        else:
+                            st.error("Signup failed — this email may already be registered. Try logging in instead.")
+
+                    except Exception as e:
+                        st.error(f"Could not create account. ({e})")
 
     st.stop()
 
