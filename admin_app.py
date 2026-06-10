@@ -360,8 +360,8 @@ def log_upload_to_supabase(file_name: str, source_type: str, vector_count: int):
     """Log a successful upload to the Supabase documents table."""
     try:
         from supabase import create_client
-        url = st.secrets.get("SUPABASE_URL") or os.getenv("SUPABASE_URL", "")
-        key = st.secrets.get("SUPABASE_KEY") or os.getenv("SUPABASE_KEY", "")
+        url = os.getenv("SUPABASE_URL", "")
+        key = os.getenv("SUPABASE_KEY", "")
         if not url or not key:
             st.warning("⚠️ Supabase credentials not found — upload not logged.")
             return
