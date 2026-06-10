@@ -112,6 +112,21 @@ def get_pinecone_index():
     return pc.Index(os.getenv("PINECONE_INDEX", "dentai"))
 
 
+def log_upload_to_supabase(file_name: str, source_type: str, vector_count: int, uploaded_by: str = None):
+    """Log a successful upload to the Supabase documents table."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_KEY", ""))
+        sb.table("documents").insert({
+            "file_name":    file_name,
+            "source_type":  source_type,
+            "vector_count": vector_count,
+            "uploaded_by":  uploaded_by,
+        }).execute()
+    except Exception as e:
+        st.warning(f"⚠️ Uploaded to Pinecone but could not log to Supabase: {e}")
+
+
 def embed_and_upsert(index, source_name: str, text: str) -> int:
     """Chunk text, embed via OpenAI, upsert to Pinecone. Returns vector count."""
     import openai
@@ -252,6 +267,7 @@ def admin_ui():
                     continue
 
                 n = embed_and_upsert(index, source_name, text)
+                log_upload_to_supabase(source_name, "file", n)
                 st.success(f"✅ **{f.name}** — {n} vectors indexed.")
 
             except Exception as e:
@@ -281,6 +297,7 @@ def admin_ui():
                     source_name = title or urlparse(url_input).netloc
                     index = get_pinecone_index()
                     n = embed_and_upsert(index, source_name, text)
+                    log_upload_to_supabase(source_name, "url", n)
                     st.success(f"✅ **{source_name}** — {n} vectors indexed.")
                 except Exception as e:
                     st.error(f"❌ Failed to index URL: {e}")
