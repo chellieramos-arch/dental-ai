@@ -366,11 +366,16 @@ def log_upload_to_supabase(file_name: str, source_type: str, vector_count: int):
             st.warning("⚠️ Supabase credentials not found — upload not logged.")
             return
         sb = create_client(url, key)
-        sb.table("documents").insert({
+        resp = sb.table("documents").insert({
             "file_name":    file_name,
             "source_type":  source_type,
             "vector_count": vector_count,
         }).execute()
+        # supabase-py v1 returns errors in the response instead of raising
+        if hasattr(resp, "error") and resp.error:
+            st.warning(f"⚠️ Supabase insert error: {resp.error}")
+        elif not resp.data:
+            st.warning(f"⚠️ Supabase insert returned no data — check RLS policies.")
     except Exception as e:
         st.warning(f"⚠️ Indexed to Pinecone but could not log to Supabase: {e}")
 
