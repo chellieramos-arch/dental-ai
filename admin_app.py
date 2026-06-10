@@ -356,6 +356,19 @@ def extract_url(url):
 # Pinecone
 # ─────────────────────────────────────────────────────────────────────────────
 
+def log_upload_to_supabase(file_name: str, source_type: str, vector_count: int):
+    """Log a successful upload to the Supabase documents table."""
+    try:
+        from supabase import create_client
+        sb = create_client(os.getenv("SUPABASE_URL", ""), os.getenv("SUPABASE_KEY", ""))
+        sb.table("documents").insert({
+            "file_name":    file_name,
+            "source_type":  source_type,
+            "vector_count": vector_count,
+        }).execute()
+    except Exception as e:
+        st.warning(f"⚠️ Indexed to Pinecone but could not log to Supabase: {e}")
+
 @st.cache_resource
 def get_index():
     from pinecone import Pinecone
@@ -599,6 +612,7 @@ def page_upload():
                     if not text.strip():
                         logs.append(("warn", f"No text found in: {f.name}")); continue
                     n = embed_and_upsert(f.name, text)
+                    log_upload_to_supabase(f.name, "file", n)
                     logs.append(("ok", f"{f.name} — {n} chunks indexed"))
                 except Exception as e:
                     logs.append(("err", f"{f.name} — {e}"))
@@ -624,6 +638,7 @@ def page_upload():
                 try:
                     title, text = extract_url(url_val.strip())
                     n = embed_and_upsert(title or urlparse(url_val).netloc, text)
+                    log_upload_to_supabase(title or urlparse(url_val).netloc, "url", n)
                     st.success(f"'{title}' indexed — {n} chunks added.")
                     st.session_state.pop("sources_cache", None)
                 except Exception as e:
