@@ -2043,21 +2043,18 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-prim
     display: block !important;
 }
 
-/* ── Sidebar selectbox — override global white-text rule for the value display ── */
-/* Trigger border */
-section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div:first-child {
+/* ── Sidebar selectbox — higher-specificity override of global white-text rule ── */
+/* Using [data-testid="stSelectbox"] * beats the generic `span` rule in specificity */
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] *,
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] span,
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] div {
+    color: #003087 !important;
+}
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {
     border: 1px solid rgba(253,185,19,0.45) !important;
     border-radius: 8px !important;
 }
-/* Value text: must be dark because the trigger background stays white */
-section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"],
-section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"] span,
-section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"] div {
-    color: #003087 !important;
-    font-weight: 600 !important;
-    font-size: 0.88rem !important;
-}
-/* Dropdown list panel */
+/* Dropdown panel renders outside sidebar — needs its own dark-theme */
 [data-baseweb="popover"] [data-baseweb="menu"],
 [data-baseweb="popover"] [role="listbox"],
 [data-baseweb="popover"] ul {
@@ -2066,7 +2063,9 @@ section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="sele
     border-radius: 8px !important;
 }
 [data-baseweb="popover"] [role="option"],
-[data-baseweb="popover"] li {
+[data-baseweb="popover"] li,
+[data-baseweb="popover"] [role="option"] span,
+[data-baseweb="popover"] li span {
     background: transparent !important;
     color: #ffffff !important;
     font-size: 0.88rem !important;
