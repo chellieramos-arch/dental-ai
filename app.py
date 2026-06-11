@@ -81,6 +81,27 @@ def _current_user_email() -> str:
         return st.session_state.get("user_email", "unknown@nsu.edu")
     return "local"
 
+def _load_profile() -> dict:
+    """Fetch and cache the current user's profile from the Supabase profiles table."""
+    if not IS_CLOUD:
+        return {}
+    if "user_profile" in st.session_state:
+        return st.session_state.user_profile
+    try:
+        sb = _get_supabase()
+        result = (
+            sb.table("profiles")
+              .select("full_name,role,program_year,school_id")
+              .eq("email", _current_user_email())
+              .execute()
+        )
+        profile = result.data[0] if result.data else {}
+        st.session_state.user_profile = profile
+        return profile
+    except Exception:
+        st.session_state.user_profile = {}
+        return {}
+
 # ── Local helpers (JSON file) ─────────────────────────────────────────────────
 def _read_all_sessions() -> list:
     if not os.path.exists(CACHE_FILE):
@@ -3540,6 +3561,61 @@ if case_input:
 
 # ─── Sidebar ─────────────────────────────────────────────────────────────────────
 with st.sidebar:
+    # ── Profile card (cloud only) ────────────────────────────────────────────────
+    if IS_CLOUD:
+        _profile   = _load_profile()
+        _full_name = _profile.get("full_name", "")
+        _role      = (_profile.get("role", "") or "").capitalize()
+        _year      = _profile.get("program_year", "")
+        _email_disp = st.session_state.get("user_email", "")
+        _initials  = "".join(w[0].upper() for w in _full_name.split()[:2]) if _full_name else "?"
+
+        _role_colors = {
+            "Student": ("#003087", "#FDB913"),
+            "Faculty": ("#1a5c2e", "#4ade80"),
+            "Admin":   ("#5c1a1a", "#f87171"),
+        }
+        _role_bg, _role_fg = _role_colors.get(_role, ("#2d3748", "#a0aec0"))
+
+        _year_str = f" · {_year}" if _year else ""
+        _name_display = _full_name if _full_name else _email_disp
+
+        st.markdown(
+            f"""
+            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(253,185,19,0.25);
+                        border-radius:12px;padding:14px 14px 12px;margin-bottom:14px;">
+              <div style="display:flex;align-items:center;gap:10px;">
+                <div style="width:40px;height:40px;border-radius:50%;
+                            background:linear-gradient(135deg,#003087,#0041b3);
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:0.95rem;font-weight:800;color:#FDB913;
+                            border:2px solid rgba(253,185,19,0.4);flex-shrink:0;">
+                  {_initials}
+                </div>
+                <div style="overflow:hidden;">
+                  <div style="color:#ffffff;font-size:0.88rem;font-weight:700;
+                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    {_name_display}
+                  </div>
+                  <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;
+                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                    {_email_disp}
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                <span style="background:{_role_bg};color:{_role_fg};
+                             font-size:0.68rem;font-weight:700;letter-spacing:0.5px;
+                             text-transform:uppercase;padding:3px 9px;border-radius:20px;">
+                  {_role}
+                </span>
+                {"<span style='color:rgba(255,255,255,0.55);font-size:0.72rem;'>" + _year_str.lstrip(" · ") + "</span>" if _year else ""}
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     # ── Language toggle (top of sidebar) ────────────────────────────────────────
     st.markdown(f"<span class='lang-label'>{_t['lang_label']}</span>", unsafe_allow_html=True)
     if st.button(_t["lang_toggle"], type="primary"):
@@ -3779,19 +3855,13 @@ with st.sidebar:
 
     # ── Logout (cloud only) ──────────────────────────────────────────────────────
     if IS_CLOUD:
-        _user_display = st.session_state.get("user_email", "")
-        if _user_display:
-            st.markdown(
-                f"<p style='color:rgba(255,255,255,0.45);font-size:0.72rem;"
-                f"text-align:center;margin:12px 0 4px;'>{_user_display}</p>",
-                unsafe_allow_html=True,
-            )
         if st.button("🚪 Sign Out", use_container_width=True, type="primary",
                      key="logout_btn"):
             # Clear auth token from URL and wipe session
             st.query_params.pop("s", None)
             for _k in list(st.session_state.keys()):
                 del st.session_state[_k]
+            st.session_state.pop("user_profile", None)
             st.rerun()
 
     st.markdown(
