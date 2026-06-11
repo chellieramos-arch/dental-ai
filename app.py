@@ -3597,76 +3597,81 @@ if case_input:
 with st.sidebar:
     # ── Profile card (cloud only) ────────────────────────────────────────────────
     if IS_CLOUD:
-        _profile   = _load_profile()
-        _full_name = _profile.get("full_name", "")
-        _role      = (_profile.get("role", "") or "").capitalize()
-        _year      = _profile.get("program_year", "")
+        _profile    = _load_profile()
+        _full_name  = _profile.get("full_name", "")
+        _role       = (_profile.get("role", "") or "").capitalize()
+        _year       = _profile.get("program_year", "")
         _email_disp = st.session_state.get("user_email", "")
-        _initials  = "".join(w[0].upper() for w in _full_name.split()[:2]) if _full_name else "?"
 
-        _role_colors = {
+        # Initials from full name, or letters in email prefix
+        if _full_name:
+            _pc_initials = "".join(w[0].upper() for w in _full_name.split()[:2])
+        else:
+            _pc_letters  = "".join(c for c in _email_disp.split("@")[0] if c.isalpha())
+            _pc_initials = _pc_letters[:2].upper() if _pc_letters else "?"
+
+        # Primary display line and optional sub line
+        _pc_primary = _full_name if _full_name else _email_disp
+        if _full_name:
+            _pc_sub = (
+                "<div style='color:rgba(255,255,255,0.45);font-size:0.7rem;"
+                "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>"
+                + _email_disp + "</div>"
+            )
+        else:
+            _pc_sub = ""
+
+        # Role badge (only when a known role exists)
+        _role_map = {
             "Student": ("#003087", "#FDB913"),
             "Faculty": ("#1a5c2e", "#4ade80"),
             "Admin":   ("#5c1a1a", "#f87171"),
         }
-
-        # Initials: from full name if available, else from email prefix letters
-        if _full_name:
-            _initials = "".join(w[0].upper() for w in _full_name.split()[:2])
+        if _role in _role_map:
+            _rb, _rf = _role_map[_role]
+            _pc_badge = (
+                "<span style='background:" + _rb + ";color:" + _rf + ";"
+                "font-size:0.65rem;font-weight:700;letter-spacing:0.5px;"
+                "text-transform:uppercase;padding:2px 8px;border-radius:20px;'>"
+                + _role + "</span>"
+            )
         else:
-            _prefix_letters = "".join(c for c in _email_disp.split("@")[0] if c.isalpha())
-            _initials = _prefix_letters[:2].upper() if _prefix_letters else "?"
+            _pc_badge = ""
 
-        # Name row: show full name; if none, show email only once (no duplicate)
-        _name_display = _full_name if _full_name else ""
-        _sub_display  = _email_disp if _full_name else ""
-
-        # Only build badge + year HTML if data actually exists
-        _badge_html = ""
-        if _role in _role_colors:
-            _rb, _rf = _role_colors[_role]
-            _badge_html += (
-                f"<span style='background:{_rb};color:{_rf};"
-                f"font-size:0.68rem;font-weight:700;letter-spacing:0.5px;"
-                f"text-transform:uppercase;padding:3px 9px;border-radius:20px;"
-                f"display:inline-block;'>{_role}</span>"
-            )
-        if _year:
-            _badge_html += (
-                f"<span style='color:rgba(255,255,255,0.55);font-size:0.72rem;"
-                f"margin-left:6px;'>{_year}</span>"
-            )
-
-        _meta_row = (
-            f"<div style='margin-top:8px;'>{_badge_html}</div>"
-            if _badge_html else ""
+        _pc_year = (
+            "<span style='color:rgba(255,255,255,0.5);font-size:0.7rem;margin-left:6px;'>"
+            + _year + "</span>"
+            if _year else ""
         )
 
-        st.markdown(
-            f"""
-            <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(253,185,19,0.25);
-                        border-radius:12px;padding:14px 14px 12px;margin-bottom:14px;">
-              <div style="display:flex;align-items:center;gap:10px;">
-                <div style="width:40px;height:40px;border-radius:50%;
-                            background:linear-gradient(135deg,#003087,#0041b3);
-                            display:flex;align-items:center;justify-content:center;
-                            font-size:0.95rem;font-weight:800;color:#FDB913;
-                            border:2px solid rgba(253,185,19,0.4);flex-shrink:0;">
-                  {_initials}
-                </div>
-                <div style="overflow:hidden;">
-                  <div style="color:#ffffff;font-size:0.88rem;font-weight:700;
-                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    {_name_display if _name_display else _email_disp}
-                  </div>
-                  {f"<div style='color:rgba(255,255,255,0.5);font-size:0.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{_sub_display}</div>" if _sub_display else ""}
-                </div>
-              </div>
-              {_meta_row}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        _pc_footer = (
+            "<div style='margin-top:8px;'>" + _pc_badge + _pc_year + "</div>"
+            if (_pc_badge or _pc_year) else ""
         )
+
+        _pc_html = (
+            "<div style='border:1px solid rgba(253,185,19,0.25);border-radius:12px;"
+            "padding:12px 14px;margin-bottom:12px;background:rgba(255,255,255,0.05);'>"
+            "<div style='display:flex;align-items:center;gap:10px;'>"
+            "<div style='min-width:38px;height:38px;border-radius:50%;"
+            "background:linear-gradient(135deg,#003087,#0041b3);"
+            "display:flex;align-items:center;justify-content:center;"
+            "font-size:0.9rem;font-weight:800;color:#FDB913;"
+            "border:2px solid rgba(253,185,19,0.4);flex-shrink:0;'>"
+            + _pc_initials +
+            "</div>"
+            "<div style='min-width:0;overflow:hidden;'>"
+            "<div style='color:#fff;font-size:0.86rem;font-weight:700;"
+            "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;'>"
+            + _pc_primary +
+            "</div>"
+            + _pc_sub +
+            "</div>"
+            "</div>"
+            + _pc_footer +
+            "</div>"
+        )
+        st.markdown(_pc_html, unsafe_allow_html=True)
 
     # ── Language toggle (top of sidebar) ────────────────────────────────────────
     st.markdown(f"<span class='lang-label'>{_t['lang_label']}</span>", unsafe_allow_html=True)
