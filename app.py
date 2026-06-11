@@ -89,6 +89,13 @@ def _load_profile() -> dict:
         return st.session_state.user_profile
     try:
         sb = _get_supabase()
+        # Authorize the query as the logged-in user so RLS lets us read the
+        # profile row. After a page refresh the client is anonymous (we only
+        # verify the JWT, never attach it), so without this the select
+        # returns no rows and the profile card falls back to email-only.
+        _tok = st.query_params.get("s", "")
+        if _tok:
+            sb.postgrest.auth(_tok)
         result = (
             sb.table("profiles")
               .select("full_name,role,program_year,school_id")
