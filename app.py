@@ -2043,6 +2043,41 @@ section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-prim
     display: block !important;
 }
 
+/* ── Sidebar selectbox — override global white-text rule for the value display ── */
+/* Trigger border */
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] > div:first-child {
+    border: 1px solid rgba(253,185,19,0.45) !important;
+    border-radius: 8px !important;
+}
+/* Value text: must be dark because the trigger background stays white */
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"],
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"] span,
+section[data-testid="stSidebar"] [data-testid="stSelectbox"] [data-baseweb="select"] [data-baseweb="value"] div {
+    color: #003087 !important;
+    font-weight: 600 !important;
+    font-size: 0.88rem !important;
+}
+/* Dropdown list panel */
+[data-baseweb="popover"] [data-baseweb="menu"],
+[data-baseweb="popover"] [role="listbox"],
+[data-baseweb="popover"] ul {
+    background: #0c1f4a !important;
+    border: 1px solid rgba(253,185,19,0.35) !important;
+    border-radius: 8px !important;
+}
+[data-baseweb="popover"] [role="option"],
+[data-baseweb="popover"] li {
+    background: transparent !important;
+    color: #ffffff !important;
+    font-size: 0.88rem !important;
+}
+[data-baseweb="popover"] [role="option"]:hover,
+[data-baseweb="popover"] li:hover,
+[data-baseweb="popover"] [aria-selected="true"] {
+    background: rgba(253,185,19,0.18) !important;
+    color: #FDB913 !important;
+}
+
 /* ══════════════════════════════════════
    UNDERWATER SUNRAYS
 ══════════════════════════════════════ */
@@ -3575,10 +3610,28 @@ with st.sidebar:
             "Faculty": ("#1a5c2e", "#4ade80"),
             "Admin":   ("#5c1a1a", "#f87171"),
         }
-        _role_bg, _role_fg = _role_colors.get(_role, ("#2d3748", "#a0aec0"))
-
-        _year_str = f" · {_year}" if _year else ""
         _name_display = _full_name if _full_name else _email_disp
+
+        # Only build badge + year HTML if data actually exists
+        _badge_html = ""
+        if _role in _role_colors:
+            _rb, _rf = _role_colors[_role]
+            _badge_html += (
+                f"<span style='background:{_rb};color:{_rf};"
+                f"font-size:0.68rem;font-weight:700;letter-spacing:0.5px;"
+                f"text-transform:uppercase;padding:3px 9px;border-radius:20px;"
+                f"display:inline-block;'>{_role}</span>"
+            )
+        if _year:
+            _badge_html += (
+                f"<span style='color:rgba(255,255,255,0.55);font-size:0.72rem;"
+                f"margin-left:6px;'>{_year}</span>"
+            )
+
+        _meta_row = (
+            f"<div style='margin-top:8px;'>{_badge_html}</div>"
+            if _badge_html else ""
+        )
 
         st.markdown(
             f"""
@@ -3603,14 +3656,7 @@ with st.sidebar:
                   </div>
                 </div>
               </div>
-              <div style="margin-top:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                <span style="background:{_role_bg};color:{_role_fg};
-                             font-size:0.68rem;font-weight:700;letter-spacing:0.5px;
-                             text-transform:uppercase;padding:3px 9px;border-radius:20px;">
-                  {_role}
-                </span>
-                {"<span style='color:rgba(255,255,255,0.55);font-size:0.72rem;'>" + _year_str.lstrip(" · ") + "</span>" if _year else ""}
-              </div>
+              {_meta_row}
             </div>
             """,
             unsafe_allow_html=True,
