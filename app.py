@@ -3609,7 +3609,17 @@ with st.sidebar:
             "Faculty": ("#1a5c2e", "#4ade80"),
             "Admin":   ("#5c1a1a", "#f87171"),
         }
-        _name_display = _full_name if _full_name else _email_disp
+
+        # Initials: from full name if available, else from email prefix letters
+        if _full_name:
+            _initials = "".join(w[0].upper() for w in _full_name.split()[:2])
+        else:
+            _prefix_letters = "".join(c for c in _email_disp.split("@")[0] if c.isalpha())
+            _initials = _prefix_letters[:2].upper() if _prefix_letters else "?"
+
+        # Name row: show full name; if none, show email only once (no duplicate)
+        _name_display = _full_name if _full_name else ""
+        _sub_display  = _email_disp if _full_name else ""
 
         # Only build badge + year HTML if data actually exists
         _badge_html = ""
@@ -3647,12 +3657,9 @@ with st.sidebar:
                 <div style="overflow:hidden;">
                   <div style="color:#ffffff;font-size:0.88rem;font-weight:700;
                               white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    {_name_display}
+                    {_name_display if _name_display else _email_disp}
                   </div>
-                  <div style="color:rgba(255,255,255,0.5);font-size:0.72rem;
-                              white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                    {_email_disp}
-                  </div>
+                  {f"<div style='color:rgba(255,255,255,0.5);font-size:0.72rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{_sub_display}</div>" if _sub_display else ""}
                 </div>
               </div>
               {_meta_row}
