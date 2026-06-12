@@ -30,6 +30,9 @@ except Exception:
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 
+# Per-school configuration (env-driven; NSU defaults)
+import school as SCHOOL
+
 # ── Page config ───────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="DentAI Admin",
@@ -451,7 +454,7 @@ def show_login():
                       font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
           <div style="font-size:1.4rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">DentAI Admin</div>
           <div style="font-size:0.85rem;color:#00c8ff;margin-top:6px;margin-bottom:28px;font-weight:500;letter-spacing:0.04em;">
-            Faculty &amp; Admin Portal
+            """ + f"{SCHOOL.SCHOOL_SHORT} — Faculty &amp; Admin Portal" + """
           </div>
         </div>
         """, unsafe_allow_html=True)
@@ -491,7 +494,7 @@ def show_topnav():
           <div style="font-size:1rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">
             Dent<span style="color:#00c8ff;">AI</span> Assist
           </div>
-          <div style="font-size:0.72rem;color:#7a90b0;">Faculty Dashboard</div>
+          <div style="font-size:0.72rem;color:#7a90b0;">""" + f"{SCHOOL.SCHOOL_SHORT} Faculty Dashboard" + """</div>
         </div>
       </div>
     </div>
@@ -638,7 +641,7 @@ def page_upload():
 
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.markdown("<h4>Index a Web URL</h4>", unsafe_allow_html=True)
-        st.markdown('<div class="card-caption">ADA guidelines, NSU pages, clinical protocols — any publicly accessible URL.</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="card-caption">ADA guidelines, {SCHOOL.SCHOOL_SHORT} pages, clinical protocols — any publicly accessible URL.</div>', unsafe_allow_html=True)
 
         url_val = st.text_input("URL", placeholder="https://www.ada.org/…",
                                 label_visibility="collapsed")

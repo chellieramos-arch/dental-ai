@@ -217,7 +217,8 @@ def auth_gate():
 
 def admin_ui():
     st.markdown("# 🦷 DentAI — Content Upload Portal")
-    st.caption("Upload course materials for NSU dental students to query.")
+    import school as SCHOOL
+    st.caption(f"Upload course materials for {SCHOOL.SCHOOL_SHORT} dental students to query.")
 
     if st.button("🔓 Logout", key="logout"):
         st.session_state.pop("admin_auth", None)

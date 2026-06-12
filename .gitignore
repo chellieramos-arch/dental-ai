@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.school.example
 chroma_db/
 chat_cache.json
 __pycache__/

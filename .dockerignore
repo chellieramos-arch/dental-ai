@@ -1,0 +1,36 @@
+# ── Local-only data (never ship these) ────────────────────────────────────────
+chroma_db/
+documents/
+chat_cache.json
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+.env.*
+.streamlit/secrets.toml
+
+# ── Virtual environment ───────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+
+# ── Python bytecode ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+
+# ── Git / editor ──────────────────────────────────────────────────────────────
+.git/
+.gitignore
+.gitattributes
+.vscode/
+.idea/
+*.code-workspace
+
+# ── OS noise ─────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── Dev / docs ────────────────────────────────────────────────────────────────
+CLOUD_SETUP.md
+*.md
+git_setup.sh

@@ -62,6 +62,9 @@ except ImportError:
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY")
 
+# Per-school configuration (env-driven; NSU defaults)
+import school as SCHOOL
+
 # ─── Session Cache (local = JSON file, cloud = Supabase) ─────────────────────
 # user_ctx is never saved (too large — contains full PDF excerpts).
 
@@ -78,7 +81,7 @@ def _get_supabase():
 def _current_user_email() -> str:
     """Return the logged-in user's email (cloud) or 'local' (local mode)."""
     if IS_CLOUD:
-        return st.session_state.get("user_email", "unknown@nsu.edu")
+        return st.session_state.get("user_email", "unknown@school.edu")
     return "local"
 
 def _load_profile() -> dict:
@@ -240,21 +243,19 @@ def new_session_id() -> str:
 
 # ─── Supabase Auth Gate (cloud mode only) ────────────────────────────────────
 # Two flows: Log In (email + password) and Create Account (signup with profile).
-# Domain restriction: only NSU email addresses are accepted.
-
-_NSU_DOMAINS = ("@mynsu.nova.edu", "@nova.edu", "@health.snova.edu")
+# Domain restriction: only the school's email addresses are accepted (see school.py).
 
 _PROGRAM_YEAR_OPTIONS = ["D1", "D2", "D3", "D4", "Resident", "Faculty", "Staff", "Other"]
 _ROLE_OPTIONS         = ["student", "faculty", "admin"]
 
 def _is_nsu_email(email: str) -> bool:
-    return any(email.strip().lower().endswith(d) for d in _NSU_DOMAINS)
+    return SCHOOL.is_school_email(email)
 
 # ─── Page Config — MUST be the first st.* call ───────────────────────────────────
 # We pick layout here based on session_state so we don't need a second call later.
 _user_is_logged_in = IS_LOCAL or ("user_email" in st.session_state)
 st.set_page_config(
-    page_title="DentAI – NSU College of Dental Medicine" if _user_is_logged_in else "DentAI – NSU Login",
+    page_title=f"DentAI – {SCHOOL.SCHOOL_NAME}" if _user_is_logged_in else f"DentAI – {SCHOOL.SCHOOL_SHORT} Login",
     page_icon="🦷",
     layout="wide" if _user_is_logged_in else "centered",
     initial_sidebar_state="expanded",
@@ -371,7 +372,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
         Dent<span style="color:#00c8ff;">AI</span> Assist
       </div>
       <div style="font-size:0.9rem;color:#7a90b0;font-weight:500;">
-        NSU College of Dental Medicine &nbsp;·&nbsp; Student Study Portal
+        """ + f"{SCHOOL.SCHOOL_NAME} &nbsp;·&nbsp; {SCHOOL.PROGRAM_LABEL}" + """
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -384,7 +385,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
         # ── Log In tab ────────────────────────────────────────────────────────
         with tab_login:
             login_email = st.text_input(
-                "NSU Email", placeholder="yourname@mynsu.nova.edu",
+                f"{SCHOOL.SCHOOL_SHORT} Email", placeholder=SCHOOL.EMAIL_PLACEHOLDER,
                 key="login_email",
             )
             login_pw = st.text_input(
@@ -397,7 +398,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 if not _email or not _pw:
                     st.error("Please enter your email and password.")
                 elif not _is_nsu_email(_email):
-                    st.error("Please use your NSU email (@mynsu.nova.edu, @nova.edu, or @health.snova.edu).")
+                    st.error(f"Please use your {SCHOOL.SCHOOL_SHORT} email ({SCHOOL.DOMAINS_READABLE}).")
                 else:
                     try:
                         resp = sb.auth.sign_in_with_password({"email": _email, "password": _pw})
@@ -419,7 +420,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
         # ── Create Account tab ────────────────────────────────────────────────
         with tab_signup:
             su_email = st.text_input(
-                "NSU Email", placeholder="yourname@mynsu.nova.edu",
+                f"{SCHOOL.SCHOOL_SHORT} Email", placeholder=SCHOOL.EMAIL_PLACEHOLDER,
                 key="su_email",
             )
             su_pw = st.text_input(
@@ -437,7 +438,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 key="su_name",
             )
             su_school_id = st.text_input(
-                "Student / Faculty ID", placeholder="NSU-issued ID number",
+                "Student / Faculty ID", placeholder=f"{SCHOOL.SCHOOL_SHORT}-issued ID number",
                 key="su_school_id",
             )
 
@@ -464,7 +465,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
                 if not all([_email, _pw, _pw2, _name, _sid]):
                     st.error("Please fill in all fields.")
                 elif not _is_nsu_email(_email):
-                    st.error("Please use your NSU email (@mynsu.nova.edu, @nova.edu, or @health.snova.edu).")
+                    st.error(f"Please use your {SCHOOL.SCHOOL_SHORT} email ({SCHOOL.DOMAINS_READABLE}).")
                 elif len(_pw) < 8:
                     st.error("Password must be at least 8 characters.")
                 elif _pw != _pw2:
@@ -544,7 +545,7 @@ st.query_params["load_sess"] = st.session_state.current_session_id
 # ─── UI Text Strings (bilingual) ─────────────────────────────────────────────────
 _UI = {
     "en": {
-        "page_title":       "DentAI – NSU College of Dental Medicine",
+        "page_title":       f"DentAI – {SCHOOL.SCHOOL_NAME}",
         "eyebrow":          "Powered by DentAI",
         "hero_title":       "Dent<span>AI</span> Assistant",
         "hero_sub":         "Intelligent clinical search",
@@ -557,10 +558,10 @@ _UI = {
         "btn_submit":       "🔍  Get Clinical Guidance",
         "btn_new_chat":     "🔄 New Chat",
         "badge":            "Clinical Guidance",
-        "response_title":   "Based on your NSU materials",
+        "response_title":   f"Based on your {SCHOOL.SCHOOL_SHORT} materials",
         "sources_head":     "📚 Sources pulled from your school materials",
         "img_panel":        "📸 From Your Materials",
-        "shark_label":      "Searching your NSU materials",
+        "shark_label":      f"Searching your {SCHOOL.SCHOOL_SHORT} materials",
         "warning_empty":    "⚠️  Please describe your patient case before requesting guidance.",
         "sidebar_how":      "How to Use",
         "sidebar_add":      "Add Materials",
@@ -576,14 +577,14 @@ _UI = {
             ("2", "Run <code>python ingest.py</code> to index them"),
             ("3", "Restart the app — new materials will be searchable"),
         ],
-        "sb_footer":        ("Nova Southeastern University<br>College of Dental Medicine<br>"
+        "sb_footer":        (f"{SCHOOL.UNIVERSITY_NAME}<br>{SCHOOL.SCHOOL_NAME}<br>"
                              "<span style='color:#FDB913;font-weight:600;'>Powered by DentAI</span>"),
         "lang_label":       "🌐 Language / Idioma",
         "you_asked":        "You asked",
         "lang_toggle":      "Español 🇪🇸",
     },
     "es": {
-        "page_title":       "DentAI – NSU Colegio de Medicina Dental",
+        "page_title":       f"DentAI – {SCHOOL.SCHOOL_NAME_ES}",
         "eyebrow":          "Impulsado por DentAI",
         "hero_title":       "Dent<span>AI</span> Assistant",
         "hero_sub":         "Búsqueda clínica inteligente",
@@ -596,10 +597,10 @@ _UI = {
         "btn_submit":       "🔍  Obtener Guía Clínica",
         "btn_new_chat":     "🔄 Nueva Consulta",
         "badge":            "Guía Clínica",
-        "response_title":   "Basado en tus materiales de NSU",
+        "response_title":   f"Basado en tus materiales de {SCHOOL.SCHOOL_SHORT}",
         "sources_head":     "📚 Fuentes de tus materiales académicos",
         "img_panel":        "📸 De tus Materiales",
-        "shark_label":      "Buscando en tus materiales de NSU",
+        "shark_label":      f"Buscando en tus materiales de {SCHOOL.SCHOOL_SHORT}",
         "warning_empty":    "⚠️  Por favor describe tu caso clínico antes de solicitar orientación.",
         "sidebar_how":      "Cómo Usar",
         "sidebar_add":      "Agregar Materiales",
@@ -615,7 +616,7 @@ _UI = {
             ("2", "Ejecuta <code>python ingest.py</code> para indexarlos"),
             ("3", "Reinicia la app — los nuevos materiales serán buscables"),
         ],
-        "sb_footer":        ("🦈 <strong>NSU Colegio de Medicina Dental</strong><br>"
+        "sb_footer":        (f"<strong>{SCHOOL.SCHOOL_NAME_ES}</strong><br>"
                              "Impulsado por Claude AI &middot; Las respuestas son ayudas de estudio,<br>no directivas clínicas"),
         "lang_label":       "🌐 Language / Idioma",
         "you_asked":        "Tú preguntaste",
@@ -772,15 +773,15 @@ def make_rays_html():
     return html
 
 
-# ─── Load NSU Seal as base64 ─────────────────────────────────────────────────────
+# ─── Load School Seal as base64 ──────────────────────────────────────────────────
 def get_logo_tag():
-    seal_path = os.path.join(os.path.dirname(__file__), "nsu_seal.png")
-    if os.path.exists(seal_path):
+    seal_path = os.path.join(os.path.dirname(__file__), SCHOOL.SEAL_FILE)
+    if SCHOOL.SEAL_FILE and os.path.exists(seal_path):
         with open(seal_path, "rb") as f:
             b64 = base64.b64encode(f.read()).decode()
-        return f"<img src='data:image/png;base64,{b64}' alt='NSU Seal' />"
+        return f"<img src='data:image/png;base64,{b64}' alt='{SCHOOL.SCHOOL_SHORT} Seal' />"
     # fallback: text badge
-    return "<div class='nsu-text-badge'>NSU</div>"
+    return f"<div class='nsu-text-badge'>{SCHOOL.SCHOOL_SHORT}</div>"
 
 # ─── Language shortcut ───────────────────────────────────────────────────────────
 _t = _UI[st.session_state.lang]   # shortcut to current-language strings
@@ -2221,7 +2222,7 @@ TOOLS = [
     {
         "name": "search_documents",
         "description": (
-            "Search the student's NSU dental school materials for relevant clinical information. "
+            f"Search the student's {SCHOOL.SCHOOL_SHORT} dental school materials for relevant clinical information. "
             "Call multiple times with different focused queries for complex or multi-part questions. "
             "Use a small n (3–6) for targeted lookups; larger n (10–15) for broad topic coverage."
         ),
@@ -2561,13 +2562,13 @@ def build_system_prompt(lang: str, memory_context: str = "", faculty_key: str = 
                         has_image: bool = False, agent_mode: str = "direct",
                         clinical_dept: str = "general") -> str:
     base = (
-        "You are a clinical study assistant for a dental student at NSU College of Dental Medicine. "
+        f"You are a clinical study assistant for a dental student at {SCHOOL.SCHOOL_NAME}. "
         "You were built to help them review and apply their own school materials during clinical work and study. "
         "The student is the clinician — you are their intelligent reference tool.\n\n"
 
         "AGENTIC TOOL USE GUIDELINES:\n"
         "- Reason from your clinical knowledge first. Reach for tools deliberately, not reflexively.\n"
-        "- Call search_documents when the question requires NSU-curriculum-specific content "
+        f"- Call search_documents when the question requires {SCHOOL.SCHOOL_SHORT}-curriculum-specific content "
         "(a particular prep design, faculty protocol, school-specific material or technique) "
         "or when ADEX exam material would strengthen a board-practice explanation. "
         "Do not search for general clinical knowledge you already have.\n"
@@ -2803,7 +2804,7 @@ def _tool_clinical_guideline(condition: str, procedure: str = "") -> str:
     if not matched:
         return (
             f"No specific clinical guideline found for '{condition}' in the database. "
-            "Use your general dental knowledge and NSU materials to guide the answer."
+            f"Use your general dental knowledge and {SCHOOL.SCHOOL_SHORT} materials to guide the answer."
         )
 
     matched.sort(key=lambda x: x[0], reverse=True)
@@ -3468,7 +3469,7 @@ st.markdown("""
       Do <strong>not</strong> upload radiographs containing patient identifiers
       (name, date of birth, patient ID, or date of service).
       Remove all identifying information before uploading.
-      Uploading identifiable patient data may violate HIPAA and NSU's patient privacy policies.
+      Uploading identifiable patient data may violate HIPAA and your school's patient privacy policies.
     </div>
   </div>
 </div>

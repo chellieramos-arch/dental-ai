@@ -17,14 +17,16 @@ Source rules:
 
 # ─── Mode Metadata ────────────────────────────────────────────────────────────
 
+import school as SCHOOL
+
 AGENT_MODES = {
     "direct": {
         "key":          "direct",
         "label":        "📖 Direct Answer",
         "short":        "Direct",
-        "description":  "Clinical reasoning grounded in your NSU materials — clear, referenced answers.",
+        "description":  f"Clinical reasoning grounded in your {SCHOOL.SCHOOL_SHORT} materials — clear, referenced answers.",
         "icon":         "📖",
-        "sidebar_hint": "Reason-first answers drawn from clinical knowledge and your NSU curriculum.",
+        "sidebar_hint": f"Reason-first answers drawn from clinical knowledge and your {SCHOOL.SCHOOL_SHORT} curriculum.",
     },
     "socratic": {
         "key":          "socratic",
