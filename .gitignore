@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.school.example
+master_schools.json
 chroma_db/
 chat_cache.json
 __pycache__/

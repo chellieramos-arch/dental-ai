@@ -1,0 +1,21 @@
+{
+  "_comment": "Copy to master_schools.json (gitignored — contains service keys). One entry per school instance.",
+  "schools": [
+    {
+      "id": "nsu",
+      "name": "NSU College of Dental Medicine",
+      "supabase_url": "https://<nsu-project>.supabase.co",
+      "supabase_key": "<nsu service key>",
+      "app_url": "https://app.dentaiassist.com",
+      "admin_url": "https://admin.dentaiassist.com"
+    },
+    {
+      "id": "ufl",
+      "name": "UF College of Dentistry",
+      "supabase_url": "https://<ufl-project>.supabase.co",
+      "supabase_key": "<ufl service key>",
+      "app_url": "https://ufl.dentaiassist.com",
+      "admin_url": "https://ufl-admin.dentaiassist.com"
+    }
+  ]
+}

@@ -46,3 +46,19 @@ create policy "Admins can read all profiles"
 
 -- 4. Index for fast email lookups
 create index if not exists profiles_email_idx on public.profiles (email);
+
+-- 5. Aggregate stats for the DentAI master dashboard (operator-only tool).
+--    Security definer so the anon key can read COUNTS ONLY — never row data.
+create or replace function public.master_stats()
+returns json
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select json_build_object(
+    'students', (select count(*) from profiles where role = 'student'),
+    'users',    (select count(*) from profiles)
+  );
+$$;
+grant execute on function public.master_stats() to anon;
