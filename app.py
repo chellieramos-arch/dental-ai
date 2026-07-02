@@ -4215,8 +4215,18 @@ if case_input:
         _caption_images, _caption_meta = retrieve_relevant_images_by_caption(case_input, top_k=5)
 
     if _caption_images:
-        page_images = _caption_images
-        _dbg, _dl, _vision = [], [], {"ran": False, "reason": "caption index served this one"}
+        # Vision-verify caption-index hits before showing them. The build-time
+        # captions are sometimes wrong (e.g. a perio/tooth chart captioned as
+        # "crown preparations"), so a caption-text match is not enough — look
+        # at the actual pixels against the question. Fail-open on error.
+        try:
+            page_images, _vision = _select_relevant_images(
+                _caption_images, case_input, assistant_text, max_keep=5,
+            )
+        except Exception as _ve:
+            page_images = _caption_images
+            _vision = {"ran": False, "error": f"{type(_ve).__name__}: {_ve}"}
+        _dbg, _dl = [], []
     elif relevant_nodes:
         page_images, _dbg, _dl, _vision = extract_page_images(
             relevant_nodes, max_images=5, question=case_input, answer_text=assistant_text,
