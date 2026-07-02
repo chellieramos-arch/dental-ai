@@ -14,6 +14,11 @@ failed silently). Unlike build_image_index.py this:
 Run from the dental-ai folder:
     MODE=cloud python3 reindex_files.py                       # crown-prep defaults
     MODE=cloud python3 reindex_files.py "Some Lecture.pdf"    # specific file(s)
+    MODE=cloud python3 reindex_files.py --from-audit          # every file that
+        # image_index_audit.csv (from audit_image_index.py) flags as having
+        # >=5 candidates but zero indexed images
+    MODE=cloud python3 reindex_files.py --from-audit --thin   # also include
+        # files with <10% of candidates indexed
 """
 
 import io
@@ -128,12 +133,39 @@ def main():
     from pinecone import Pinecone
     from supabase import create_client
 
-    files = sys.argv[1:] or DEFAULT_FILES
+    args = sys.argv[1:]
+    if "--from-audit" in args:
+        import csv
+        include_thin = "--thin" in args
+        try:
+            with open("image_index_audit.csv") as f:
+                rows = list(csv.DictReader(f))
+        except FileNotFoundError:
+            sys.exit("image_index_audit.csv not found — run audit_image_index.py first.")
+        files = []
+        for r in rows:
+            cand, idx_n = int(r["candidates"]), int(r["indexed"])
+            if cand >= 5 and (idx_n == 0 or (include_thin and idx_n < cand * 0.1)):
+                files.append(r["file"])
+        est = sum(int(r["candidates"]) for r in rows if r["file"] in set(files))
+        print(f"--from-audit: {len(files)} file(s), ~{est} vision calls (Sonnet). Ctrl+C now to abort.")
+        time.sleep(5)
+    else:
+        files = [a for a in args if not a.startswith("--")] or DEFAULT_FILES
     client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), max_retries=3)
     oai = openai.OpenAI()
     pc = Pinecone(api_key=PINECONE_API_KEY)
     index = pc.Index(PINECONE_INDEX)
     sb = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY or SUPABASE_KEY)
+
+    # Checkpoint — safe to Ctrl+C between files and re-run without re-billing.
+    import json
+    PROGRESS = "reindex_progress.json"
+    done = set(json.load(open(PROGRESS))) if os.path.exists(PROGRESS) else set()
+    already = [f for f in files if f in done]
+    if already:
+        print(f"skipping {len(already)} file(s) already re-indexed (delete {PROGRESS} to redo)")
+    files = [f for f in files if f not in done]
 
     grand_kept = grand_skipped = 0
     for fname in files:
@@ -201,6 +233,8 @@ def main():
         if vectors:
             index.upsert(vectors=vectors)
             print(f"    → upserted {len(vectors)} vector(s)")
+        done.add(fname)
+        json.dump(sorted(done), open(PROGRESS, "w"))
 
     print(f"\nDONE: {grand_kept} indexed, {grand_skipped} skipped across {len(files)} file(s).")
     print("Verify with: MODE=cloud python3 check_image_index.py")
