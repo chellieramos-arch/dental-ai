@@ -1046,7 +1046,7 @@ def extract_page_images(source_nodes, max_images=5, min_px=120, question=None, a
     return kept, debug_meta, dl_meta, vision_meta
 
 
-def retrieve_relevant_images_by_caption(question: str, top_k: int = 5) -> tuple:
+def retrieve_relevant_images_by_caption(question: str, top_k: int = 5, source_files: list = None) -> tuple:
     """
     Search the dedicated image-caption index (built by build_image_index.py)
     directly with the student's question, independent of which text chunks
@@ -1070,10 +1070,28 @@ def retrieve_relevant_images_by_caption(question: str, top_k: int = 5) -> tuple:
 
         pc  = PineconeClient(api_key=PINECONE_API_KEY)
         idx = pc.Index(PINECONE_INDEX)
-        results = idx.query(
-            vector=embedding, top_k=top_k, include_metadata=True,
+
+        # Two queries, not one. The global query alone lets caption-keyword
+        # junk from unrelated docs (e.g. treatment-planning charts whose
+        # captions say "crown preparation") monopolize the top-k, while the
+        # genuinely instructive figures live in the documents the TEXT answer
+        # actually cited. So: one query restricted to those source documents
+        # (these get first claim on the slots), plus one global query so a
+        # great diagram in an uncited doc can still surface.
+        matches = []
+        if source_files:
+            cited = idx.query(
+                vector=embedding, top_k=top_k * 2, include_metadata=True,
+                filter={"content_type": {"$eq": "image"},
+                        "file_name": {"$in": list(source_files)[:20]}},
+            )
+            matches.extend(cited.matches)
+        global_q = idx.query(
+            vector=embedding, top_k=top_k * 2, include_metadata=True,
             filter={"content_type": {"$eq": "image"}},
         )
+        seen_ids = {getattr(m, "id", None) for m in matches}
+        matches.extend(m for m in global_q.matches if getattr(m, "id", None) not in seen_ids)
 
         _sb_url = os.getenv("SUPABASE_URL", "")
         _sb_key = SUPABASE_SERVICE_KEY or os.getenv("SUPABASE_KEY", "")
@@ -1090,17 +1108,25 @@ def retrieve_relevant_images_by_caption(question: str, top_k: int = 5) -> tuple:
         # crown prep question), so this floor only cuts obvious junk. The real
         # relevance decision is the Haiku caption check below.
         SCORE_FLOOR = 0.78
+        CITED_FLOOR = 0.75   # cited-doc images get provenance benefit of the doubt
+        _cited_set = set(source_files or [])
         survivors = []
-        for m in results.matches:
+        for m in matches:
             score = getattr(m, "score", 0.0) or 0.0
             meta = m.metadata or {}
+            is_cited = meta.get("file_name") in _cited_set
             match_meta.append({"file": meta.get("file_name"), "page": meta.get("page_label"),
-                                "score": round(score, 4), "caption": meta.get("caption", "")[:120]})
-            if score < SCORE_FLOOR:
+                                "score": round(score, 4), "cited": is_cited,
+                                "caption": meta.get("caption", "")[:120]})
+            if score < (CITED_FLOOR if is_cited else SCORE_FLOOR):
                 continue
             if not meta.get("storage_key"):
                 continue
             survivors.append(meta)
+        # Cited-doc images first, then by score — cap the pool before the
+        # Haiku check so we never send a huge list.
+        survivors.sort(key=lambda s: (s.get("file_name") not in _cited_set,))
+        survivors = survivors[:max(top_k * 2, 10)]
 
         # ── Haiku caption-relevance check ─────────────────────────────
         # Embedding similarity alone can't tell "same domain" from "answers
@@ -4252,7 +4278,12 @@ if case_input:
     # e.g. for files build_image_index.py hasn't processed yet.
     _caption_images, _caption_meta = ([], {"ran": False, "reason": "no relevant_nodes"})
     if relevant_nodes and case_input:
-        _caption_images, _caption_meta = retrieve_relevant_images_by_caption(case_input, top_k=5)
+        _cited_files = list(dict.fromkeys(
+            n.metadata.get("file_name") for n in relevant_nodes if n.metadata.get("file_name")
+        ))
+        _caption_images, _caption_meta = retrieve_relevant_images_by_caption(
+            case_input, top_k=5, source_files=_cited_files,
+        )
 
     if _caption_images:
         # Vision-verify caption-index hits before showing them. The build-time
