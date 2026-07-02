@@ -1,0 +1,15 @@
+[
+  {
+    "topic": "Endodontics",
+    "student_count": 5,
+    "student_emails": [
+      "a@nsu.edu",
+      "b@nsu.edu",
+      "c@nsu.edu",
+      "d@nsu.edu",
+      "e@nsu.edu"
+    ],
+    "created_at": "2026-06-16T00:55:58.691739",
+    "resolved": false
+  }
+]

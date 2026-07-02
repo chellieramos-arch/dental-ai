@@ -45,7 +45,8 @@ az webapp config appsettings set --resource-group dentai-rg --name dentai-app -o
   PINECONE_API_KEY="$PINECONE_API_KEY" \
   PINECONE_INDEX="${PINECONE_INDEX:-dentai}" \
   SUPABASE_URL="$SUPABASE_URL" \
-  SUPABASE_KEY="$SUPABASE_KEY"
+  SUPABASE_KEY="$SUPABASE_KEY" \
+  SUPABASE_SERVICE_KEY="$SUPABASE_SERVICE_KEY"
 
 echo "==> Enabling continuous deployment from ACR"
 az webapp deployment container config --enable-cd true --resource-group dentai-rg --name dentai-app -o none

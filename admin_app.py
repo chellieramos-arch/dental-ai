@@ -16,6 +16,13 @@ from datetime import datetime, timedelta
 from urllib.parse import urlparse
 from collections import Counter
 
+from gap_alerts import (
+    compute_gap_alerts,
+    load_gap_alerts,
+    resolve_alert,
+    DEFAULT_THRESHOLD,
+)
+
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -47,14 +54,15 @@ st.markdown("""
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
   :root {
-    --bg: #050a12;
-    --surface: #0c1524;
-    --surface2: #111e30;
-    --border: rgba(0,200,255,0.12);
-    --cyan: #00c8ff;
+    --bg: #ffffff;
+    --surface: #f4f7fb;
+    --surface2: #e8eef7;
+    --border: rgba(0,144,204,0.18);
+    --cyan: #0090cc;
+    --cyan-dark: #006fa0;
     --purple: #7b5ea7;
-    --text: #e8f0fe;
-    --muted: #7a90b0;
+    --text: #0f1f35;
+    --muted: #5a7090;
   }
 
   /* ── Base ── */
@@ -68,7 +76,7 @@ st.markdown("""
 
   /* ── Sidebar ── */
   [data-testid="stSidebar"] {
-    background: #030810 !important;
+    background: #f0f4f8 !important;
     border-right: 1px solid var(--border) !important;
   }
   [data-testid="stSidebar"] .sidebar-logo {
@@ -95,13 +103,22 @@ st.markdown("""
     margin-bottom: 2px !important;
   }
   [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(0,200,255,0.08) !important;
+    background: rgba(0,144,204,0.08) !important;
     color: var(--cyan) !important;
   }
   [data-testid="stSidebar"] .nav-active > button {
-    background: rgba(0,200,255,0.10) !important;
+    background: rgba(0,144,204,0.10) !important;
     color: var(--cyan) !important;
     border-left: 2px solid var(--cyan) !important;
+  }
+
+
+  /* ── Selectbox dropdown: white bg, black text ── */
+  div[data-baseweb="popover"] *,
+  div[data-baseweb="menu"] *,
+  ul[role="listbox"],
+  ul[role="listbox"] * {
+    color: #111 !important;
   }
 
   /* ── Cards ── */
@@ -145,9 +162,9 @@ st.markdown("""
     letter-spacing: 0.03em;
     text-transform: uppercase;
   }
-  .stat-icon.blue   { background: rgba(0,200,255,0.12); color: var(--cyan); }
-  .stat-icon.green  { background: rgba(0,200,100,0.12); color: #00c851; }
-  .stat-icon.purple { background: rgba(123,94,167,0.18); color: #a78bfa; }
+  .stat-icon.blue   { background: rgba(0,144,204,0.12); color: var(--cyan); }
+  .stat-icon.green  { background: rgba(0,160,90,0.12);  color: #1a8a5e; }
+  .stat-icon.purple { background: rgba(123,94,167,0.12); color: #7b5ea7; }
   .stat-num { font-size: 1.8rem; font-weight: 700; color: var(--text); line-height: 1; font-family: 'Space Grotesk', sans-serif; }
   .stat-lbl { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
 
@@ -166,11 +183,11 @@ st.markdown("""
     letter-spacing: 0.04em; flex-shrink: 0;
     text-transform: uppercase;
   }
-  .file-type-badge.pdf  { background: rgba(239,68,68,0.15); color: #f87171; }
-  .file-type-badge.doc  { background: rgba(0,200,255,0.12); color: var(--cyan); }
-  .file-type-badge.ppt  { background: rgba(251,146,60,0.15); color: #fb923c; }
-  .file-type-badge.web  { background: rgba(0,200,100,0.12); color: #00c851; }
-  .file-type-badge.txt  { background: rgba(255,255,255,0.06); color: var(--muted); }
+  .file-type-badge.pdf  { background: rgba(220,38,38,0.10);  color: #dc2626; }
+  .file-type-badge.doc  { background: rgba(0,144,204,0.12);  color: var(--cyan); }
+  .file-type-badge.ppt  { background: rgba(234,88,12,0.12);  color: #ea580c; }
+  .file-type-badge.web  { background: rgba(22,163,74,0.12);  color: #16a34a; }
+  .file-type-badge.txt  { background: rgba(0,0,0,0.06);      color: var(--muted); }
   .src-name { font-size: 0.88rem; color: var(--text); font-weight: 500; flex: 1; }
   .src-date { font-size: 0.75rem; color: var(--muted); }
 
@@ -186,14 +203,14 @@ st.markdown("""
 
   /* ── Inputs ── */
   [data-testid="stFileUploader"] {
-    border: 1.5px dashed rgba(0,200,255,0.25) !important;
+    border: 1.5px dashed rgba(0,144,204,0.3) !important;
     border-radius: 10px !important;
-    background: rgba(0,200,255,0.03) !important;
+    background: rgba(0,144,204,0.03) !important;
     padding: 8px !important;
   }
   [data-testid="stTextInput"] input,
   [data-testid="stTextArea"] textarea {
-    background: var(--bg) !important;
+    background: var(--surface) !important;
     border: 1px solid var(--border) !important;
     border-radius: 8px !important;
     color: var(--text) !important;
@@ -201,13 +218,13 @@ st.markdown("""
   [data-testid="stTextInput"] input:focus,
   [data-testid="stTextArea"] textarea:focus {
     border-color: var(--cyan) !important;
-    box-shadow: 0 0 0 3px rgba(0,200,255,0.08) !important;
+    box-shadow: 0 0 0 3px rgba(0,144,204,0.10) !important;
   }
 
   /* ── Primary button ── */
   .stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
-    color: #000000 !important;
+    background: linear-gradient(135deg, var(--cyan), var(--cyan-dark)) !important;
+    color: #ffffff !important;
     border: none !important;
     border-radius: 8px !important;
     font-weight: 800 !important;
@@ -216,12 +233,12 @@ st.markdown("""
     opacity: 1 !important;
   }
   .stButton > button[kind="primary"] p {
-    color: #000000 !important;
+    color: #ffffff !important;
     font-weight: 800 !important;
     opacity: 1 !important;
   }
   .stButton > button[kind="primary"]:hover {
-    box-shadow: 0 4px 20px rgba(0,200,255,0.35) !important;
+    box-shadow: 0 4px 20px rgba(0,144,204,0.3) !important;
     transform: translateY(-1px) !important;
   }
   .stButton > button[kind="secondary"] {
@@ -236,8 +253,8 @@ st.markdown("""
   }
 
   /* ── Input placeholder ── */
-  [data-testid="stTextInput"] input::placeholder { color: #7a90b0 !important; opacity: 1 !important; }
-  [data-testid="stTextInput"] input { color: #e8f0fe !important; font-size: 0.95rem !important; }
+  [data-testid="stTextInput"] input::placeholder { color: var(--muted) !important; opacity: 1 !important; }
+  [data-testid="stTextInput"] input { color: var(--text) !important; font-size: 0.95rem !important; }
 
   /* ── Login ── */
   .login-container {
@@ -248,6 +265,7 @@ st.markdown("""
     border-radius: 16px;
     padding: 44px 40px;
     text-align: center;
+    box-shadow: 0 4px 24px rgba(0,144,204,0.08);
   }
 
   /* ── Badge ── */
@@ -257,9 +275,9 @@ st.markdown("""
     border-radius: 999px;
     font-size: 0.72rem;
     font-weight: 600;
-    background: rgba(0,200,100,0.12);
-    color: #00c851;
-    border: 1px solid rgba(0,200,100,0.2);
+    background: rgba(22,163,74,0.10);
+    color: #16a34a;
+    border: 1px solid rgba(22,163,74,0.2);
   }
 
   /* ── Scrollable list ── */
@@ -270,7 +288,7 @@ st.markdown("""
   }
   .scroll-list::-webkit-scrollbar { width: 4px; }
   .scroll-list::-webkit-scrollbar-track { background: transparent; }
-  .scroll-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .scroll-list::-webkit-scrollbar-thumb { background: rgba(0,144,204,0.25); border-radius: 4px; }
 
   /* ── Streamlit overrides ── */
   .stAlert { border-radius: 10px !important; }
@@ -282,21 +300,39 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
-EMBED_MODEL    = "text-embedding-ada-002"
-CHUNK_SIZE     = 1500
-CHUNK_OVERLAP  = 200
-BATCH_SIZE     = 96
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+EMBED_MODEL   = "text-embedding-ada-002"
+CHUNK_SIZE    = 1500
+CHUNK_OVERLAP = 200
+BATCH_SIZE    = 96
 
-def _admin_token() -> str:
-    """Deterministic token derived from the admin password — stored in URL to survive refresh."""
-    import hashlib
-    return hashlib.sha256(f"dentai_admin:{ADMIN_PASSWORD}".encode()).hexdigest()[:24]
+# ── Supabase client ───────────────────────────────────────────────────────────
+@st.cache_resource
+def _get_supabase():
+    from supabase import create_client
+    return create_client(
+        os.getenv("SUPABASE_URL", ""),
+        os.getenv("SUPABASE_KEY", ""),
+    )
 
-# ── Auto-restore admin session from URL token ─────────────────────────────────
-if ADMIN_PASSWORD and not st.session_state.get("admin_auth"):
-    if st.query_params.get("t") == _admin_token():
-        st.session_state["admin_auth"] = True
+# ── Restore session from Supabase access token in URL ────────────────────────
+def _try_restore_session():
+    token = st.query_params.get("s")
+    if token and not st.session_state.get("admin_auth"):
+        try:
+            sb   = _get_supabase()
+            data = sb.auth.get_user(token)
+            if data and data.user:
+                email = data.user.email
+                prof  = sb.table("profiles").select("role,full_name").eq("email", email).execute()
+                row   = prof.data[0] if prof.data else {}
+                if row.get("role") == "faculty":
+                    st.session_state["admin_auth"]    = True
+                    st.session_state["faculty_email"] = email
+                    st.session_state["faculty_name"]  = row.get("full_name", email)
+        except Exception:
+            pass
+
+_try_restore_session()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -326,22 +362,29 @@ def chunk_text(text):
     return [c.strip() for c in chunks if c.strip()]
 
 def extract_pdf(b):
+    """Returns list of (page_num, page_text) — page boundaries are preserved so
+    each indexed chunk can record which page it came from. This is what lets
+    the student app later pull the correct page's image for a retrieved chunk;
+    flattening the whole doc into one string (the old behavior) threw that away."""
     import fitz
     doc = fitz.open(stream=b, filetype="pdf")
-    text = "".join(p.get_text() for p in doc); doc.close(); return text
+    pages = [(i + 1, p.get_text()) for i, p in enumerate(doc)]
+    doc.close()
+    return pages
 
 def extract_docx(b):
     from docx import Document
     return "\n".join(p.text for p in Document(io.BytesIO(b)).paragraphs if p.text.strip())
 
 def extract_pptx(b):
+    """Returns list of (slide_num, slide_text) — same page-tracking rationale as extract_pdf."""
     from pptx import Presentation
-    lines = []
-    for slide in Presentation(io.BytesIO(b)).slides:
-        for shape in slide.shapes:
-            if hasattr(shape, "text") and shape.text.strip():
-                lines.append(shape.text.strip())
-    return "\n".join(lines)
+    slides = []
+    for i, slide in enumerate(Presentation(io.BytesIO(b)).slides):
+        lines = [shape.text.strip() for shape in slide.shapes
+                 if hasattr(shape, "text") and shape.text.strip()]
+        slides.append((i + 1, "\n".join(lines)))
+    return slides
 
 def extract_url(url):
     import requests
@@ -358,6 +401,44 @@ def extract_url(url):
 # ─────────────────────────────────────────────────────────────────────────────
 # Pinecone
 # ─────────────────────────────────────────────────────────────────────────────
+
+def store_file_in_supabase(file_name: str, raw_bytes: bytes) -> bool:
+    """
+    Upload the original file to Supabase Storage bucket 'course-files'.
+    This lets the student-facing app download source files on-demand for
+    image extraction — the documents/ folder is excluded from Docker builds.
+    Returns True on success, False on any failure (non-fatal).
+    """
+    try:
+        from supabase import create_client
+        url = os.getenv("SUPABASE_URL", "")
+        key = os.getenv("SUPABASE_SERVICE_KEY", "") or os.getenv("SUPABASE_KEY", "")
+        if not url or not key:
+            return False
+        sb = create_client(url, key)
+        # Detect MIME type for the upload
+        ext = os.path.splitext(file_name)[1].lower()
+        mime_map = {
+            ".pdf": "application/pdf",
+            ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".ppt": "application/vnd.ms-powerpoint",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        }
+        content_type = mime_map.get(ext, "application/octet-stream")
+        # Remove existing file first (upsert not always available)
+        try:
+            sb.storage.from_("course-files").remove([file_name])
+        except Exception:
+            pass
+        sb.storage.from_("course-files").upload(
+            file_name,
+            raw_bytes,
+            {"content-type": content_type},
+        )
+        return True
+    except Exception:
+        return False
+
 
 def log_upload_to_supabase(file_name: str, source_type: str, vector_count: int):
     """Log a successful upload to the Supabase documents table."""
@@ -388,25 +469,61 @@ def get_index():
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY",""))
     return pc.Index(os.getenv("PINECONE_INDEX","dentai"))
 
-def embed_and_upsert(source_name, text):
+def embed_and_upsert(source_name, content):
+    """
+    content: either a flat string (docx/txt/url — no page concept), or a list
+    of (page_num, page_text) tuples (pdf/pptx — from extract_pdf/extract_pptx).
+    Paged content gets a "page_label" in each chunk's metadata so the student
+    app can later find the right page for image extraction; flat content is
+    indexed the same as before (no page concept applies to those formats).
+    """
     import openai
-    idx    = get_index()
-    oai    = openai.OpenAI()
-    chunks = chunk_text(text)
-    if not chunks: return 0
+    idx = get_index()
+    oai = openai.OpenAI()
+
+    tagged_chunks = []   # (page_num_or_None, chunk_text)
+    if isinstance(content, str):
+        for c in chunk_text(content):
+            tagged_chunks.append((None, c))
+    else:
+        for page_num, page_text in content:
+            if not page_text or not page_text.strip():
+                continue
+            for c in chunk_text(page_text):
+                tagged_chunks.append((page_num, c))
+
+    if not tagged_chunks:
+        return 0
+
+    # Re-uploading/replacing this file? Clear its old vectors first so stale
+    # chunks (e.g. from before page tracking existed, or just fewer/more chunks
+    # than last time) don't linger alongside the new ones.
+    try:
+        idx.delete(filter={"file_name": {"$eq": source_name}})
+    except Exception:
+        pass   # delete-by-metadata isn't supported on every Pinecone plan/index type — non-fatal
+
     total = 0
-    for i in range(0, len(chunks), BATCH_SIZE):
-        batch = chunks[i:i+BATCH_SIZE]
-        resp  = oai.embeddings.create(input=batch, model=EMBED_MODEL)
-        idx.upsert(vectors=[{
-            "id": f"{source_name}::{i+j}",
-            "values": item.embedding,
-            "metadata": {
-                "text": batch[j], "file_name": source_name,
-                "chunk_index": i+j,
+    for i in range(0, len(tagged_chunks), BATCH_SIZE):
+        batch = tagged_chunks[i:i + BATCH_SIZE]
+        texts = [c for _, c in batch]
+        resp  = oai.embeddings.create(input=texts, model=EMBED_MODEL)
+        vectors = []
+        for j, item in enumerate(resp.data):
+            page_num, chunk = batch[j]
+            meta = {
+                "text": chunk, "file_name": source_name,
+                "chunk_index": i + j,
                 "uploaded_at": datetime.utcnow().isoformat(),
-            },
-        } for j, item in enumerate(resp.data)])
+            }
+            if page_num is not None:
+                meta["page_label"] = str(page_num)
+            vectors.append({
+                "id": f"{source_name}::{i+j}",
+                "values": item.embedding,
+                "metadata": meta,
+            })
+        idx.upsert(vectors=vectors)
         total += len(batch)
     return total
 
@@ -446,33 +563,138 @@ def delete_source(name):
 def show_login():
     _, col, _ = st.columns([1, 1.2, 1])
     with col:
-        st.markdown("""
+        st.markdown(f"""
         <div class="login-container">
-          <div style="width:56px;height:56px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+          <div style="width:56px;height:56px;background:linear-gradient(135deg,#0090cc,#7b5ea7);
                       border-radius:14px;margin:0 auto 18px;display:flex;align-items:center;
                       justify-content:center;font-family:'Space Grotesk',sans-serif;
-                      font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
-          <div style="font-size:1.4rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">DentAI Admin</div>
-          <div style="font-size:0.85rem;color:#00c8ff;margin-top:6px;margin-bottom:28px;font-weight:500;letter-spacing:0.04em;">
-            """ + f"{SCHOOL.SCHOOL_SHORT} — Faculty &amp; Admin Portal" + """
+                      font-size:22px;font-weight:900;color:#fff;letter-spacing:-1px;
+                      box-shadow:0 8px 28px rgba(0,144,204,0.2);">D+</div>
+          <div style="font-size:1.4rem;font-weight:700;color:#0f1f35;font-family:'Space Grotesk',sans-serif;">DentAI Admin</div>
+          <div style="font-size:0.85rem;color:#0090cc;margin-top:6px;margin-bottom:28px;font-weight:500;letter-spacing:0.04em;">
+            {SCHOOL.SCHOOL_SHORT} — Faculty &amp; Admin Portal
           </div>
         </div>
         """, unsafe_allow_html=True)
-        pw = st.text_input("Password", type="password",
-                           placeholder="Admin password",
-                           label_visibility="collapsed")
-        if st.button("Sign in", use_container_width=True, type="primary"):
-            if ADMIN_PASSWORD and pw == ADMIN_PASSWORD:
-                st.session_state["admin_auth"] = True
-                st.session_state.pop("sources_cache", None)
-                st.query_params["t"] = _admin_token()
-                st.rerun()
-            elif not ADMIN_PASSWORD:
-                st.error("ADMIN_PASSWORD not set in secrets.")
-            else:
-                st.error("Incorrect password.")
+
+        sb = _get_supabase()
+        tab_login, tab_signup = st.tabs(["Sign In", "Create Faculty Account"])
+
+        # ── Sign In ───────────────────────────────────────────────────────────
+        with tab_login:
+            f_email = st.text_input(
+                "Faculty Email", placeholder=SCHOOL.EMAIL_PLACEHOLDER,
+                key="fac_login_email",
+            )
+            f_pw = st.text_input(
+                "Password", type="password", placeholder="Your password",
+                key="fac_login_pw",
+            )
+            if st.button("Sign In", use_container_width=True, type="primary", key="btn_fac_login"):
+                _email = f_email.strip().lower()
+                _pw    = f_pw.strip()
+                if not _email or not _pw:
+                    st.error("Please enter your email and password.")
+                elif not SCHOOL.is_school_email(_email):
+                    st.error(f"Please use your {SCHOOL.SCHOOL_SHORT} email ({SCHOOL.DOMAINS_READABLE}).")
+                else:
+                    try:
+                        resp = sb.auth.sign_in_with_password({"email": _email, "password": _pw})
+                        # Verify faculty role
+                        prof = sb.table("profiles").select("role,full_name").eq("email", _email).execute()
+                        row  = prof.data[0] if prof.data else {}
+                        if row.get("role") != "faculty":
+                            sb.auth.sign_out()
+                            st.error("This portal is for faculty only. Please use the student portal at app.dentaiassist.com.")
+                        else:
+                            st.session_state["admin_auth"]    = True
+                            st.session_state["faculty_email"] = _email
+                            st.session_state["faculty_name"]  = row.get("full_name", _email)
+                            st.session_state.pop("sources_cache", None)
+                            if resp.session and resp.session.access_token:
+                                st.query_params["s"] = resp.session.access_token
+                            st.rerun()
+                    except Exception as e:
+                        st.error(f"Sign in failed. Check your email and password. ({e})")
+
+        # ── Create Faculty Account ────────────────────────────────────────────
+        with tab_signup:
+            su_email = st.text_input(
+                "Faculty Email", placeholder=SCHOOL.EMAIL_PLACEHOLDER,
+                key="fac_su_email",
+            )
+            su_pw = st.text_input(
+                "Password", type="password", placeholder="At least 8 characters",
+                key="fac_su_pw",
+            )
+            su_pw2 = st.text_input(
+                "Confirm Password", type="password", placeholder="Repeat password",
+                key="fac_su_pw2",
+            )
+            su_name = st.text_input(
+                "Full Name", placeholder="Dr. First Last",
+                key="fac_su_name",
+            )
+            col_title, col_dept = st.columns(2)
+            with col_title:
+                su_title = st.selectbox(
+                    "Title", key="fac_su_title",
+                    options=["Clinical Professor", "Associate Professor", "Assistant Professor",
+                             "Clinical Instructor", "Adjunct Faculty", "Program Director",
+                             "Department Chair", "Other"],
+                )
+            with col_dept:
+                su_dept = st.text_input(
+                    "Department", placeholder="e.g. Oral Surgery",
+                    key="fac_su_dept",
+                )
+
+            if st.button("Create Faculty Account", use_container_width=True,
+                         type="primary", key="btn_fac_signup"):
+                _email = su_email.strip().lower()
+                _pw    = su_pw.strip()
+                _name  = su_name.strip()
+
+                if not all([_email, _pw, su_pw2.strip(), _name, su_dept.strip()]):
+                    st.error("Please fill in all fields.")
+                elif not SCHOOL.is_school_email(_email):
+                    st.error(f"Please use your {SCHOOL.SCHOOL_SHORT} email ({SCHOOL.DOMAINS_READABLE}).")
+                elif len(_pw) < 8:
+                    st.error("Password must be at least 8 characters.")
+                elif _pw != su_pw2.strip():
+                    st.error("Passwords do not match.")
+                else:
+                    try:
+                        resp  = sb.auth.sign_up({"email": _email, "password": _pw})
+                        _user = resp.user
+                        if _user:
+                            sb.table("profiles").insert({
+                                "id":         _user.id,
+                                "email":      _email,
+                                "full_name":  _name,
+                                "school_id":  f"{SCHOOL.SCHOOL_ID}-{su_title.lower().replace(' ','-')}",
+                                "role":       "faculty",
+                                "program_year": su_dept.strip(),
+                            }).execute()
+                            if resp.session and resp.session.access_token:
+                                st.session_state["admin_auth"]    = True
+                                st.session_state["faculty_email"] = _email
+                                st.session_state["faculty_name"]  = _name
+                                st.session_state.pop("sources_cache", None)
+                                st.query_params["s"] = resp.session.access_token
+                                st.rerun()
+                            else:
+                                st.success(
+                                    f"Account created! Check **{_email}** for a confirmation link, "
+                                    "then return here to sign in."
+                                )
+                        else:
+                            st.error("Signup failed — this email may already be registered.")
+                    except Exception as e:
+                        st.error(f"Could not create account. ({e})")
+
         st.markdown(
-            "<p style='text-align:center;font-size:0.78rem;color:#7a90b0;margin-top:14px;letter-spacing:0.04em;'>"
+            "<p style='text-align:center;font-size:0.78rem;color:#5a7090;margin-top:20px;letter-spacing:0.04em;font-weight:500;'>"
             "🔒 Faculty &amp; staff access only</p>",
             unsafe_allow_html=True)
 
@@ -482,25 +704,28 @@ def show_login():
 # ─────────────────────────────────────────────────────────────────────────────
 
 def show_topnav():
-    st.markdown("""
+    st.markdown(f"""
     <div style="display:flex;align-items:center;justify-content:space-between;
-                padding:18px 0 20px;border-bottom:1px solid rgba(0,200,255,0.12);
+                padding:18px 0 20px;border-bottom:1px solid rgba(0,144,204,0.18);
                 margin-bottom:28px;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div style="width:32px;height:32px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+        <div style="width:32px;height:32px;background:linear-gradient(135deg,#0090cc,#7b5ea7);
                     border-radius:8px;display:flex;align-items:center;justify-content:center;
                     font-size:14px;font-weight:900;color:#fff;font-family:'Space Grotesk',sans-serif;">D+</div>
         <div>
-          <div style="font-size:1rem;font-weight:700;color:#e8f0fe;font-family:'Space Grotesk',sans-serif;">
-            Dent<span style="color:#00c8ff;">AI</span> Assist
+          <div style="font-size:1rem;font-weight:700;color:#0f1f35;font-family:'Space Grotesk',sans-serif;">
+            Dent<span style="color:#0090cc;">AI</span> Assist
           </div>
-          <div style="font-size:0.72rem;color:#7a90b0;">""" + f"{SCHOOL.SCHOOL_SHORT} Faculty Dashboard" + """</div>
+          <div style="font-size:0.72rem;color:#5a7090;">{SCHOOL.SCHOOL_SHORT} Faculty Dashboard</div>
         </div>
+      </div>
+      <div style="font-size:0.82rem;color:#5a7090;">
+        👤 {st.session_state.get("faculty_name", "")}
       </div>
     </div>
     """, unsafe_allow_html=True)
 
-    pages = ["Overview", "Student Insights", "Upload Content", "Knowledge Base"]
+    pages = ["Overview", "Student Insights", "Gap Alerts", "Upload Content", "Knowledge Base"]
     cols = st.columns(len(pages) + 1)
     for i, label in enumerate(pages):
         with cols[i]:
@@ -510,9 +735,13 @@ def show_topnav():
                 st.rerun()
     with cols[-1]:
         if st.button("Sign out", use_container_width=True):
-            for k in ["admin_auth", "sources_cache", "page"]:
+            try:
+                _get_supabase().auth.sign_out()
+            except Exception:
+                pass
+            for k in ["admin_auth", "faculty_email", "faculty_name", "sources_cache", "page"]:
                 st.session_state.pop(k, None)
-            st.query_params.pop("t", None)
+            st.query_params.clear()
             st.rerun()
 
 
@@ -616,16 +845,18 @@ def page_upload():
                 try:
                     raw = f.read()
                     ext = os.path.splitext(f.name)[1].lower()
-                    if ext == ".pdf":    text = extract_pdf(raw)
-                    elif ext == ".docx": text = extract_docx(raw)
-                    elif ext == ".pptx": text = extract_pptx(raw)
-                    elif ext == ".txt":  text = raw.decode("utf-8","replace")
+                    if ext == ".pdf":    text = extract_pdf(raw)     # list of (page_num, text)
+                    elif ext == ".docx": text = extract_docx(raw)    # flat string
+                    elif ext == ".pptx": text = extract_pptx(raw)    # list of (slide_num, text)
+                    elif ext == ".txt":  text = raw.decode("utf-8","replace")  # flat string
                     else:
                         logs.append(("warn", f"Skipped unsupported format: {f.name}")); continue
-                    if not text.strip():
+                    _has_content = text.strip() if isinstance(text, str) else any(t.strip() for _, t in text)
+                    if not _has_content:
                         logs.append(("warn", f"No text found in: {f.name}")); continue
                     n = embed_and_upsert(f.name, text)
                     log_upload_to_supabase(f.name, "file", n)
+                    store_file_in_supabase(f.name, raw)  # save original for image extraction
                     logs.append(("ok", f"{f.name} — {n} chunks indexed"))
                 except Exception as e:
                     logs.append(("err", f"{f.name} — {e}"))
@@ -924,13 +1155,13 @@ def page_insights():
 
         for topic, count in sorted_topics[:12]:
             pct = int((count / max_count) * 100)
-            bar_color = "#00c8ff"
+            bar_color = "#0090cc"
             st.markdown(f"""
             <div style="margin-bottom:12px;">
               <div style="display:flex;justify-content:space-between;
                           font-size:0.83rem;margin-bottom:4px;">
-                <span style="color:#e8f0fe;font-weight:500;">{topic}</span>
-                <span style="color:#7a90b0;">{count} {'query' if count == 1 else 'queries'}</span>
+                <span style="color:#0f1f35;font-weight:500;">{topic}</span>
+                <span style="color:#5a7090;">{count} {'query' if count == 1 else 'queries'}</span>
               </div>
               <div style="background:rgba(255,255,255,0.06);border-radius:4px;height:6px;">
                 <div style="width:{pct}%;background:{bar_color};border-radius:4px;
@@ -958,13 +1189,13 @@ def page_insights():
             topics = ", ".join(entry.get("topics", []))
             st.markdown(f"""
             <div class="src-item" style="flex-direction:column;align-items:flex-start;gap:4px;">
-              <div style="font-size:0.86rem;color:#e8f0fe;font-weight:500;line-height:1.4;">
+              <div style="font-size:0.86rem;color:#0f1f35;font-weight:500;line-height:1.4;">
                 {q}{"…" if len(entry.get("question","")) > 120 else ""}
               </div>
               <div style="display:flex;gap:12px;">
-                <span style="font-size:0.72rem;color:#7a90b0;">{email}</span>
-                <span style="font-size:0.72rem;color:#7a90b0;">{ts}</span>
-                <span style="font-size:0.72rem;color:#00c8ff;">{topics}</span>
+                <span style="font-size:0.72rem;color:#5a7090;">{email}</span>
+                <span style="font-size:0.72rem;color:#5a7090;">{ts}</span>
+                <span style="font-size:0.72rem;color:#0090cc;">{topics}</span>
               </div>
             </div>""", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
@@ -982,19 +1213,151 @@ def page_insights():
             import streamlit as _st
             _st.bar_chart(
                 chart_data,
-                color="#00c8ff",
+                color="#0090cc",
                 height=120,
             )
             st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Entry point
+# Gap Alerts Page — Patent Claim 5
 # ─────────────────────────────────────────────────────────────────────────────
 
-if not ADMIN_PASSWORD:
-    st.error("ADMIN_PASSWORD is not set. Add it to .streamlit/secrets.toml.")
-    st.stop()
+def page_gap_alerts():
+    st.markdown('<div class="page-title">Knowledge Gap Alerts</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="page-sub">Topics where multiple students show repeated difficulty — '
+        'aggregated from student query history.</div>',
+        unsafe_allow_html=True,
+    )
+
+    _mode = os.getenv("MODE", "local").lower()
+
+    # ── Controls row ──────────────────────────────────────────────────────────
+    col_thresh, col_days, col_run, col_spacer = st.columns([1.2, 1.2, 1, 2])
+    with col_thresh:
+        threshold = st.number_input(
+            "Alert threshold (unique students)",
+            min_value=2, max_value=50,
+            value=DEFAULT_THRESHOLD,
+            help="An alert fires when this many distinct students have asked about the same topic.",
+        )
+    with col_days:
+        days = st.selectbox(
+            "Look-back window",
+            options=[7, 30, 90, 0],
+            format_func=lambda d: {7: "7 days", 30: "30 days", 90: "90 days", 0: "All time"}[d],
+            index=1,
+        )
+    with col_run:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        run_analysis = st.button("▶  Run Analysis", type="primary", use_container_width=True)
+
+    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+    # ── Run analysis on demand ────────────────────────────────────────────────
+    if run_analysis:
+        all_logs = load_query_logs()
+        with st.spinner("Analyzing student query history…"):
+            fired = compute_gap_alerts(
+                query_logs=all_logs,
+                threshold=int(threshold),
+                days=int(days),
+                mode=_mode,
+            )
+        if fired:
+            st.success(f"✅  Analysis complete — {len(fired)} gap alert(s) detected or refreshed.")
+        else:
+            st.info("No topics exceeded the threshold in the selected window.")
+
+    # ── Load and display alerts ───────────────────────────────────────────────
+    alerts = load_gap_alerts(mode=_mode)
+    active  = [a for a in alerts if not a.get("resolved")]
+    resolved = [a for a in alerts if a.get("resolved")]
+
+    if not alerts:
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);
+                    border-radius:12px;padding:32px;text-align:center;margin-top:20px;">
+          <div style="font-size:2rem;margin-bottom:12px;">📊</div>
+          <div style="color:#0f1f35;font-weight:600;margin-bottom:6px;">No alerts yet</div>
+          <div style="color:#5a7090;font-size:0.87rem;">
+            Click <strong>Run Analysis</strong> to scan student query history for persistent knowledge gaps.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+        return
+
+    # ── Active alerts ─────────────────────────────────────────────────────────
+    if active:
+        st.markdown(
+            f"<div style='font-size:0.95rem;font-weight:700;color:#0f1f35;"
+            f"margin-bottom:16px;'>🔴  Active Alerts ({len(active)})</div>",
+            unsafe_allow_html=True,
+        )
+        for alert in active:
+            topic    = alert.get("topic", "—")
+            count    = alert.get("student_count", 0)
+            ts       = alert.get("created_at", "")[:10]
+            students = alert.get("student_emails", [])
+
+            col_card, col_resolve = st.columns([5, 1])
+            with col_card:
+                st.markdown(f"""
+                <div style="background:rgba(255,80,80,0.07);border:1px solid rgba(255,80,80,0.25);
+                            border-left:4px solid #ff5050;border-radius:10px;
+                            padding:16px 20px;margin-bottom:10px;">
+                  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+                    <div>
+                      <div style="font-size:1rem;font-weight:700;color:#ff8080;margin-bottom:4px;">
+                        {topic}
+                      </div>
+                      <div style="font-size:0.82rem;color:#5a7090;">
+                        {count} student{'s' if count != 1 else ''} affected &nbsp;·&nbsp; Detected {ts}
+                      </div>
+                    </div>
+                    <div style="background:rgba(255,80,80,0.18);border-radius:20px;
+                                padding:4px 14px;font-size:0.78rem;font-weight:700;color:#ff8080;">
+                      {count} students
+                    </div>
+                  </div>
+                  {"" if not students else
+                    "<div style='margin-top:10px;font-size:0.76rem;color:#5a7090;'>"
+                    + "  ".join(f"<span style='background:rgba(255,255,255,0.06);"
+                                f"border-radius:4px;padding:2px 7px;margin:2px 2px 0 0;"
+                                f"display:inline-block;'>{e}</span>" for e in students[:8])
+                    + ("…" if len(students) > 8 else "")
+                    + "</div>"
+                  }
+                </div>
+                """, unsafe_allow_html=True)
+            with col_resolve:
+                st.markdown("<div style='height:10px'></div>", unsafe_allow_html=True)
+                if st.button("✓ Resolve", key=f"resolve_{topic}", use_container_width=True):
+                    resolve_alert(topic, mode=_mode)
+                    st.rerun()
+
+    # ── Resolved alerts ───────────────────────────────────────────────────────
+    if resolved:
+        with st.expander(f"✅  Resolved alerts ({len(resolved)})", expanded=False):
+            for alert in resolved:
+                topic = alert.get("topic", "—")
+                count = alert.get("student_count", 0)
+                ts    = alert.get("created_at", "")[:10]
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);
+                            border-radius:8px;padding:12px 16px;margin-bottom:8px;opacity:0.65;">
+                  <span style="color:#0f1f35;font-weight:600;">{topic}</span>
+                  <span style="color:#5a7090;font-size:0.8rem;margin-left:12px;">
+                    {count} students &nbsp;·&nbsp; {ts} &nbsp;·&nbsp; resolved
+                  </span>
+                </div>
+                """, unsafe_allow_html=True)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Entry point
+# ─────────────────────────────────────────────────────────────────────────────
 
 if not st.session_state.get("admin_auth"):
     show_login()
@@ -1005,5 +1368,6 @@ else:
     page = st.session_state.get("page", "Overview")
     if page == "Overview":            page_overview()
     elif page == "Student Insights":  page_insights()
+    elif page == "Gap Alerts":        page_gap_alerts()
     elif page == "Upload Content":    page_upload()
     elif page == "Knowledge Base":    page_knowledge_base()

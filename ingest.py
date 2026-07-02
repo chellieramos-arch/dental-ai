@@ -60,7 +60,7 @@ def ingest_local():
 
 
 # ── Cloud mode (PyMuPDF + OpenAI embeddings + Pinecone directly) ──────────────
-def ingest_cloud():
+def ingest_cloud(wipe_first: bool = True):
     import fitz          # PyMuPDF — already installed
     import openai
     from pinecone import Pinecone
@@ -70,6 +70,17 @@ def ingest_cloud():
     index = pc.Index(PINECONE_INDEX)
     oai   = openai.OpenAI()
 
+    if wipe_first:
+        # This script does a full (re)build of the corpus. Old vectors were
+        # indexed without page numbers (whole-doc text flattened before
+        # chunking), so a partial upsert would leave stale, page-less chunks
+        # mixed in with the new page-aware ones. Wipe and rebuild clean.
+        print("[ingest] Clearing existing vectors before rebuild...")
+        try:
+            index.delete(delete_all=True)
+        except Exception as e:
+            print(f"[ingest] Warning: could not clear index first ({e}). Continuing anyway.")
+
     pdf_files = sorted(f for f in os.listdir(PDF_FOLDER) if f.lower().endswith(".pdf"))
     print(f"[ingest] Found {len(pdf_files)} PDF(s).\n")
 
@@ -78,25 +89,37 @@ def ingest_cloud():
         path = os.path.join(PDF_FOLDER, pdf_file)
         print(f"  → {pdf_file}", end="", flush=True)
         try:
-            doc       = fitz.open(path)
-            full_text = "".join(page.get_text() for page in doc)
+            doc = fitz.open(path)
+            # Chunk PER PAGE (not the whole doc flattened) so each vector's
+            # metadata records which page it came from — this is what lets
+            # the student app later pull the correct page's image for a
+            # retrieved chunk, instead of always defaulting to page 1.
+            tagged_chunks = []   # (page_num, chunk_text)
+            for page_idx, page in enumerate(doc):
+                page_text = page.get_text()
+                if not page_text.strip():
+                    continue
+                for c in chunk_text(page_text):
+                    if c.strip():
+                        tagged_chunks.append((page_idx + 1, c))
             doc.close()
 
-            chunks = chunk_text(full_text)
-            print(f"  ({len(chunks)} chunks)", end="", flush=True)
+            print(f"  ({len(tagged_chunks)} chunks)", end="", flush=True)
 
             # Embed + upsert in batches
-            for i in range(0, len(chunks), BATCH_SIZE):
-                batch = chunks[i : i + BATCH_SIZE]
-                resp  = oai.embeddings.create(input=batch, model=EMBED_MODEL)
+            for i in range(0, len(tagged_chunks), BATCH_SIZE):
+                batch = tagged_chunks[i : i + BATCH_SIZE]
+                texts = [c for _, c in batch]
+                resp  = oai.embeddings.create(input=texts, model=EMBED_MODEL)
                 vectors = [
                     {
                         "id":     f"{pdf_file}::{i + j}",
                         "values": item.embedding,
                         "metadata": {
-                            "text":        batch[j],
+                            "text":        batch[j][1],
                             "file_name":   pdf_file,
                             "chunk_index": i + j,
+                            "page_label":  str(batch[j][0]),
                         },
                     }
                     for j, item in enumerate(resp.data)

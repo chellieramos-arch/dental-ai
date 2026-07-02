@@ -36,7 +36,7 @@ from llama_index.core import VectorStoreIndex
 from llama_index.core import StorageContext
 
 # ─── Config (controls local vs cloud mode) ───────────────────────────────────
-from config import IS_LOCAL, IS_CLOUD, CHROMA_PATH, CHROMA_COLLECTION
+from config import IS_LOCAL, IS_CLOUD, CHROMA_PATH, CHROMA_COLLECTION, SUPABASE_SERVICE_KEY
 from agents import (
     get_mode_prompt, get_mode_meta, mode_keys, mode_labels, DEFAULT_MODE, AGENT_MODES,
     CLINICAL_DEPARTMENTS, DEFAULT_DEPARTMENT, get_department_context,
@@ -283,9 +283,10 @@ if IS_CLOUD and "user_email" not in st.session_state:
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap');
 
       :root {
-        --bg: #050a12; --surface: #0c1524;
-        --border: rgba(0,200,255,0.15); --cyan: #00c8ff;
-        --purple: #7b5ea7; --text: #e8f0fe; --muted: #7a90b0;
+        --bg: #ffffff; --surface: #f4f7fb;
+        --border: rgba(0,144,204,0.18); --cyan: #0090cc;
+        --cyan-dark: #006fa0; --purple: #7b5ea7;
+        --text: #0f1f35; --muted: #5a7090;
       }
 
       [data-testid="stAppViewContainer"], .main {
@@ -307,9 +308,9 @@ if IS_CLOUD and "user_email" not in st.session_state:
       [data-testid="stTextInput"] input::placeholder { color: var(--muted) !important; }
       [data-testid="stTextInput"] input:focus {
         border-color: var(--cyan) !important;
-        box-shadow: 0 0 0 3px rgba(0,200,255,0.08) !important;
+        box-shadow: 0 0 0 3px rgba(0,144,204,0.1) !important;
       }
-      [data-testid="stTextInput"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
+      [data-testid="stTextInput"] label { color: var(--muted) !important; font-size: 0.82rem !important; font-weight: 500 !important; }
 
       /* selectbox */
       [data-testid="stSelectbox"] > div > div {
@@ -318,7 +319,7 @@ if IS_CLOUD and "user_email" not in st.session_state:
         border-radius: 10px !important;
         color: var(--text) !important;
       }
-      [data-testid="stSelectbox"] label { color: var(--muted) !important; font-size: 0.82rem !important; }
+      [data-testid="stSelectbox"] label { color: var(--muted) !important; font-size: 0.82rem !important; font-weight: 500 !important; }
 
       /* tabs */
       [data-testid="stTabs"] [data-baseweb="tab-list"] {
@@ -339,14 +340,14 @@ if IS_CLOUD and "user_email" not in st.session_state:
 
       /* primary button */
       .stButton > button[kind="primary"] {
-        background: linear-gradient(135deg, var(--cyan), #0090cc) !important;
-        color: #000 !important; font-weight: 800 !important;
+        background: linear-gradient(135deg, var(--cyan), var(--cyan-dark)) !important;
+        color: #fff !important; font-weight: 800 !important;
         border: none !important; border-radius: 10px !important;
         font-size: 0.95rem !important; padding: 12px !important;
       }
-      .stButton > button[kind="primary"] p { color: #000 !important; font-weight: 800 !important; }
+      .stButton > button[kind="primary"] p { color: #fff !important; font-weight: 800 !important; }
       .stButton > button[kind="primary"]:hover {
-        box-shadow: 0 4px 20px rgba(0,200,255,0.35) !important;
+        box-shadow: 0 4px 20px rgba(0,144,204,0.3) !important;
         transform: translateY(-1px) !important;
       }
 
@@ -363,15 +364,16 @@ if IS_CLOUD and "user_email" not in st.session_state:
     </style>
 
     <div style="text-align:center; padding:3.5rem 0 2rem;">
-      <div style="width:64px;height:64px;background:linear-gradient(135deg,#00c8ff,#7b5ea7);
+      <div style="width:64px;height:64px;background:linear-gradient(135deg,#0090cc,#7b5ea7);
                   border-radius:16px;margin:0 auto 20px;display:flex;align-items:center;
                   justify-content:center;font-family:'Space Grotesk',sans-serif;
-                  font-size:24px;font-weight:900;color:#fff;letter-spacing:-1px;">D+</div>
+                  font-size:24px;font-weight:900;color:#fff;letter-spacing:-1px;
+                  box-shadow:0 8px 32px rgba(0,144,204,0.2);">D+</div>
       <div style="font-family:'Space Grotesk',sans-serif;font-size:2rem;font-weight:700;
-                  color:#e8f0fe;letter-spacing:-0.02em;margin-bottom:8px;">
-        Dent<span style="color:#00c8ff;">AI</span> Assist
+                  color:#0f1f35;letter-spacing:-0.02em;margin-bottom:8px;">
+        Dent<span style="color:#0090cc;">AI</span> Assist
       </div>
-      <div style="font-size:0.9rem;color:#7a90b0;font-weight:500;">
+      <div style="font-size:0.9rem;color:#5a7090;font-weight:500;">
         """ + f"{SCHOOL.SCHOOL_NAME} &nbsp;·&nbsp; {SCHOOL.PROGRAM_LABEL}" + """
       </div>
     </div>
@@ -514,9 +516,17 @@ if "load_sess" in st.query_params:
         st.session_state.current_session_id = _load_id
         st.session_state.chat_history       = load_session(_load_id)
         st.session_state.latest_images      = []
+        st.session_state.scroll_to_top      = True
         st.rerun()
     elif not _load_id:
         st.query_params.clear()
+
+# ─── Scroll-to-top on initial page load ───────────────────────────────────────
+# st.chat_input() auto-scrolls on every rerun. On the very first run of a browser
+# session (page load / hard refresh), fight it back to the top.
+if "page_load_scroll_done" not in st.session_state:
+    st.session_state.page_load_scroll_done = True
+    st.session_state.scroll_to_top = True
 
 # ─── Session State ────────────────────────────────────────────────────────────────
 if "current_session_id" not in st.session_state:
@@ -556,7 +566,7 @@ _UI = {
                              "The patient has a large existing amalgam restoration and limited interocclusal space."),
         "placeholder_followup": "Ask a follow-up question…",
         "btn_submit":       "🔍  Get Clinical Guidance",
-        "btn_new_chat":     "🔄 New Chat",
+        "btn_new_chat":     "+ New Conversation",
         "badge":            "Clinical Guidance",
         "response_title":   f"Based on your {SCHOOL.SCHOOL_SHORT} materials",
         "sources_head":     "📚 Sources pulled from your school materials",
@@ -580,7 +590,7 @@ _UI = {
         "sb_footer":        (f"{SCHOOL.UNIVERSITY_NAME}<br>{SCHOOL.SCHOOL_NAME}<br>"
                              "<span style='color:#FDB913;font-weight:600;'>Powered by DentAI</span>"),
         "lang_label":       "🌐 Language / Idioma",
-        "you_asked":        "You asked",
+        "you_asked":        "YOU",
         "lang_toggle":      "Español 🇪🇸",
     },
     "es": {
@@ -595,7 +605,7 @@ _UI = {
                              "El paciente tiene una restauración de amalgama grande y espacio interoclusal limitado."),
         "placeholder_followup": "Escribe una pregunta de seguimiento…",
         "btn_submit":       "🔍  Obtener Guía Clínica",
-        "btn_new_chat":     "🔄 Nueva Consulta",
+        "btn_new_chat":     "+ Nueva Conversación",
         "badge":            "Guía Clínica",
         "response_title":   f"Basado en tus materiales de {SCHOOL.SCHOOL_SHORT}",
         "sources_head":     "📚 Fuentes de tus materiales académicos",
@@ -619,7 +629,7 @@ _UI = {
         "sb_footer":        (f"<strong>{SCHOOL.SCHOOL_NAME_ES}</strong><br>"
                              "Impulsado por Claude AI &middot; Las respuestas son ayudas de estudio,<br>no directivas clínicas"),
         "lang_label":       "🌐 Language / Idioma",
-        "you_asked":        "Tú preguntaste",
+        "you_asked":        "TÚ",
         "lang_toggle":      "English 🇺🇸",
     },
 }
@@ -627,24 +637,165 @@ _UI = {
 # ─── PDF Image Extractor ──────────────────────────────────────────────────────────
 DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "documents")
 
-def extract_page_images(source_nodes, max_images=5, min_px=100):
+def _looks_decorative(image_bytes: bytes) -> bool:
+    """Heuristic: flag near-flat-color images (logos, color bars, banner backgrounds)
+    that pass the size filter but aren't actually clinical diagrams/photos."""
+    try:
+        import io as _io2
+        from PIL import Image as _PILImage
+        im = _PILImage.open(_io2.BytesIO(image_bytes)).convert("L")
+        im.thumbnail((64, 64))
+        pixels = list(im.getdata())
+        if not pixels:
+            return False
+        mean = sum(pixels) / len(pixels)
+        variance = sum((p - mean) ** 2 for p in pixels) / len(pixels)
+        return (variance ** 0.5) < 10   # near-uniform grayscale → decorative, not content
+    except Exception:
+        return False
+
+
+def _select_relevant_images(candidates, question, answer_text, max_keep=5):
     """
-    Pull visual content from the PDF pages cited in the retrieved nodes.
+    Ask Claude (Haiku, cheap) to actually look at each candidate image and keep
+    only the ones that depict something relevant to the question/answer, versus
+    irrelevant figures, cover pages, or unrelated diagrams that just happened to
+    share a page with a retrieved text chunk. Fails open: on any error the caller
+    falls back to the heuristic (score+area) ranking untouched.
+    """
+    import io as _io2
+    import base64 as _b64_2
+    from PIL import Image as _PILImage
+    from config import CLAUDE_MODEL_SIMPLE
 
-    Strategy:
+    content = [{
+        "type": "text",
+        "text": (
+            "A dental student asked a clinical question and got this answer. "
+            "Below are candidate images pulled from their course materials that "
+            "MIGHT be worth showing alongside the answer. Look at the ACTUAL VISUAL "
+            "CONTENT of each one — not just whether the topic matches — and keep only "
+            "images that add something a photo/diagram can show but text can't: an "
+            "anatomical illustration, a clinical/radiograph photo, a labeled diagram, "
+            "a chart, or a step-by-step figure.\n\n"
+            "REJECT an image if it is:\n"
+            "- Mostly typed text — a screenshot of a bullet list, paragraph, checklist, "
+            "or table. These are flagged below as 'full-page render' candidates because "
+            "no embedded picture was found on that page; render them ONLY if the page "
+            "itself is genuinely a diagram/chart/illustration, not typed content. If the "
+            "answer text already says the same thing in words, a screenshot of that same "
+            "text is useless — reject it.\n"
+            "- A cover page, table of contents, logo, decorative banner, or unrelated topic.\n"
+            "- A figure for a different tooth/procedure than what was asked about.\n\n"
+            f"QUESTION: {question}\n\n"
+            f"ANSWER GIVEN: {(answer_text or '')[:1500]}\n\n"
+            f"Candidate images follow, labeled 0 through {len(candidates) - 1}."
+        ),
+    }]
+    sent_idx = []
+    for i, c in enumerate(candidates):
+        try:
+            im = _PILImage.open(_io2.BytesIO(c["bytes"]))
+            if im.mode not in ("RGB", "L"):
+                im = im.convert("RGB")
+            im.thumbnail((400, 400))
+            buf = _io2.BytesIO()
+            im.save(buf, format="JPEG", quality=70)
+            b64 = _b64_2.standard_b64encode(buf.getvalue()).decode("utf-8")
+        except Exception:
+            continue
+        _kind = "full-page render — check it's an actual diagram, not typed text" \
+            if c.get("is_full_page_render") else "extracted picture/figure"
+        content.append({"type": "text", "text": f"Image {i} ({c['caption']}) — {_kind}:"})
+        content.append({
+            "type": "image",
+            "source": {"type": "base64", "media_type": "image/jpeg", "data": b64},
+        })
+        sent_idx.append(i)
+
+    if not sent_idx:
+        return candidates[:max_keep], {"ran": False, "reason": "no thumbnails could be built"}
+
+    resp = anthropic_client.messages.create(
+        model=CLAUDE_MODEL_SIMPLE,
+        max_tokens=300,
+        tools=[{
+            "name": "select_relevant_images",
+            "description": "Choose which candidate images are actually relevant and worth showing the student.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "keep": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": f"Indices (0-{len(candidates) - 1}) of images worth showing, best first. Empty array if none are relevant.",
+                    }
+                },
+                "required": ["keep"],
+            },
+        }],
+        tool_choice={"type": "tool", "name": "select_relevant_images"},
+        messages=[{"role": "user", "content": content}],
+    )
+
+    keep_idx = []
+    for block in resp.content:
+        if block.type == "tool_use" and block.name == "select_relevant_images":
+            keep_idx = block.input.get("keep", [])
+            break
+
+    kept = []
+    for i in keep_idx:
+        if isinstance(i, int) and 0 <= i < len(candidates) and len(kept) < max_keep:
+            kept.append(candidates[i])
+
+    meta = {"ran": True, "candidates_sent": len(sent_idx), "kept": len(kept), "keep_idx": keep_idx}
+    return kept, meta
+
+
+def extract_page_images(source_nodes, max_images=5, min_px=120, question=None, answer_text=None):
+    """
+    Pull visual content from the PDF pages or PPTX slides cited in retrieved nodes,
+    then (if question/answer_text are supplied) ask Claude to verify each candidate
+    actually depicts something relevant before showing it to the student.
+
+    Strategy for PDFs:
       1. Try extracting embedded image objects from the page (fast, high quality).
-      2. If a page has no embedded objects (common in PowerPoint-exported slides),
-         fall back to rendering the whole page as a PNG — this always works.
+      2. If a page has no embedded objects (common in slide-exported PDFs),
+         fall back to rendering the whole page as a PNG.
 
-    Returns a list of dicts: {bytes, ext, caption, area}
+    Strategy for PPTX:
+      1. Open with python-pptx, navigate to the specific slide.
+      2. Extract picture shapes (shape_type == 13).
+
+    Junk filtering: skips images that are small relative to the page (icons),
+    extreme aspect ratios (divider bars), sit in the header/footer margin
+    (logos, page numbers), or are near-flat in color (solid banners/backgrounds).
+
+    Ranking: candidates are ranked by the retrieval score of the text chunk that
+    cited their page (not raw pixel area), so images from the most relevant
+    passages are preferred over merely-large images from tangential ones.
+
+    Returns (images, debug_meta, dl_meta, vision_meta):
+      images      — list of dicts: {bytes, ext, caption, area}
+      debug_meta  — list of per-node diagnostic dicts
+      dl_meta     — list of per-file download/lookup outcomes
+      vision_meta — diagnostic dict for the Claude relevance-filter pass
     """
     if not PYMUPDF_OK:
-        return []
+        return [], [], [], {"ran": False, "reason": "PyMuPDF not available"}
 
-    # ── Collect unique (filename → set of 0-based page indices) from top nodes ──
+    # ── Rank nodes by retrieval score, only pull images from the most relevant chunks ──
+    ranked_nodes = sorted(source_nodes[:15], key=lambda n: getattr(n, "score", 0.0) or 0.0, reverse=True)
+    ranked_nodes = ranked_nodes[:8]
+
+    # ── Collect unique (filename → set of 0-based page/slide indices), tracking
+    #    the best chunk relevance score that cited each page ──────────────────
     seen: dict = {}
+    page_score: dict = {}   # (fname, page_idx) -> best relevance score
     debug_meta = []
-    for node in source_nodes[:15]:
+    dl_meta = []   # per-file download/lookup outcomes — always fully returned, never truncated
+    for node in ranked_nodes:
         fname = node.metadata.get("file_name", "")
         # LlamaIndex stores "page_label" (1-indexed str). Try several fallbacks.
         page_raw = (
@@ -653,22 +804,113 @@ def extract_page_images(source_nodes, max_images=5, min_px=100):
             or node.metadata.get("page")
             or "1"
         )
-        debug_meta.append({"file": fname, "page_raw": page_raw,
+        _score = getattr(node, "score", 0.0) or 0.0
+        debug_meta.append({"file": fname, "page_raw": page_raw, "score": round(_score, 4),
                             "keys": list(node.metadata.keys())})
-        if not fname.lower().endswith(".pdf"):
+        is_pdf  = fname.lower().endswith(".pdf")
+        is_pptx = fname.lower().endswith((".pptx", ".ppt"))
+        if not (is_pdf or is_pptx):
             continue
         try:
             page_idx = max(0, int(str(page_raw).strip()) - 1)
         except (ValueError, TypeError):
             page_idx = 0
         seen.setdefault(fname, set()).add(page_idx)
+        _key = (fname, page_idx)
+        page_score[_key] = max(page_score.get(_key, 0.0), _score)
 
-    images = []
+    candidates = []
 
     for fname, page_set in seen.items():
         fpath = os.path.join(DOCS_DIR, fname)
+        _tmp_cache_path = os.path.join("/tmp", "dentai_img_cache", fname)
+
+        # ── Cloud fallback: download from Supabase Storage if not on local disk ──
+        _dl_error = None
+        _sb_key_kind = None
+        if os.path.exists(fpath):
+            dl_meta.append({"file": fname, "status": "found on local disk", "path": fpath})
+        elif os.path.exists(_tmp_cache_path):
+            # Already downloaded in a previous request to this same container — reuse it
+            # instead of re-pulling a potentially 10-30MB file from Supabase every message.
+            fpath = _tmp_cache_path
+            dl_meta.append({"file": fname, "status": "found in /tmp cache (skipped re-download)"})
+        elif IS_CLOUD:
+            try:
+                _sb_url = os.getenv("SUPABASE_URL", "")
+                # course-files is a private bucket — the anon SUPABASE_KEY can't read it
+                # under RLS, so prefer the service key (bypasses RLS) and fall back to
+                # the anon key only if the service key isn't configured.
+                _sb_key = SUPABASE_SERVICE_KEY or os.getenv("SUPABASE_KEY", "")
+                _sb_key_kind = "service" if SUPABASE_SERVICE_KEY else ("anon" if _sb_key else "none")
+                if _sb_url and _sb_key:
+                    from supabase import create_client as _sb_create
+                    _sb = _sb_create(_sb_url, _sb_key)
+                    _raw = _sb.storage.from_("course-files").download(fname)
+                    if _raw:
+                        os.makedirs(os.path.dirname(_tmp_cache_path), exist_ok=True)
+                        with open(_tmp_cache_path, "wb") as _tf:
+                            _tf.write(_raw)
+                        fpath = _tmp_cache_path
+                        dl_meta.append({"file": fname, "status": "downloaded from Supabase",
+                                         "key_used": _sb_key_kind, "bytes": len(_raw)})
+                    else:
+                        _dl_error = "download() returned empty response"
+                else:
+                    _dl_error = "SUPABASE_URL or service/anon key not set"
+            except Exception as _e:
+                _dl_error = f"{type(_e).__name__}: {_e}"
+        else:
+            _dl_error = "not on local disk and IS_CLOUD is False"
+
         if not os.path.exists(fpath):
+            dl_meta.append({"file": fname, "status": "FAILED", "key_used": _sb_key_kind,
+                             "error": _dl_error or "unknown"})
             continue
+
+        # ════════════════════════════════════════════════════════════
+        # PPTX path — extract picture shapes from specific slides
+        # ════════════════════════════════════════════════════════════
+        if fname.lower().endswith((".pptx", ".ppt")):
+            try:
+                from pptx import Presentation as _Prs
+                prs = _Prs(fpath)
+                for slide_idx in sorted(page_set):
+                    if slide_idx >= len(prs.slides):
+                        continue
+                    slide = prs.slides[slide_idx]
+                    _score = page_score.get((fname, slide_idx), 0.0)
+                    for shape in slide.shapes:
+                        if shape.shape_type != 13:   # 13 = MSO_SHAPE_TYPE.PICTURE
+                            continue
+                        try:
+                            w, h = shape.image.size  # pixels of the embedded image
+                            if w < min_px or h < min_px:
+                                continue
+                            if max(w, h) / max(min(w, h), 1) > 8:  # skip thin bars
+                                continue
+                            if _looks_decorative(shape.image.blob):
+                                continue
+                            candidates.append({
+                                "bytes":   shape.image.blob,
+                                "ext":     shape.image.ext,   # 'png', 'jpeg', etc.
+                                "caption": f"📄 {fname}  ·  slide {slide_idx + 1}",
+                                "area":    w * h,
+                                "score":   _score,
+                            })
+                        except Exception:
+                            pass
+                    if len(candidates) >= max_images * 3:
+                        break
+            except Exception:
+                pass
+            if len(candidates) >= max_images * 3:
+                break
+            continue   # don't fall through to PDF path
+
+        # ════════════════════════════════════════════════════════════
+        # PDF path — embedded objects → full-page render fallback
+        # ════════════════════════════════════════════════════════════
         try:
             doc = fitz.open(fpath)
         except Exception:
@@ -678,8 +920,10 @@ def extract_page_images(source_nodes, max_images=5, min_px=100):
             if page_idx >= len(doc):
                 continue
             page = doc[page_idx]
+            _score = page_score.get((fname, page_idx), 0.0)
+            page_area = max(page.rect.width * page.rect.height, 1)
 
-            # ── Pass 1: embedded image objects ──────────────────────────────
+            # ── Pass 1: embedded image objects ──────────────────────
             embedded = []
             for img_info in page.get_images(full=True):
                 xref = img_info[0]
@@ -690,41 +934,207 @@ def extract_page_images(source_nodes, max_images=5, min_px=100):
                 w, h = base["width"], base["height"]
                 if w < min_px or h < min_px:
                     continue
-                if max(w, h) / max(min(w, h), 1) > 8:   # skip thin decorative bars
+                if max(w, h) / max(min(w, h), 1) > 8:
+                    continue
+                # Skip images confined to the header/footer margin (logos, page numbers)
+                # or that don't cover a meaningful chunk of the page (small icons/badges).
+                try:
+                    bbox = page.get_image_bbox(img_info)
+                    margin = page.rect.height * 0.08
+                    if bbox.y1 < margin or bbox.y0 > page.rect.height - margin:
+                        continue
+                    if (bbox.width * bbox.height) / page_area < 0.02:
+                        continue
+                except Exception:
+                    pass
+                if _looks_decorative(base["image"]):
                     continue
                 embedded.append({
                     "bytes":   base["image"],
                     "ext":     base["ext"],
                     "caption": f"📄 {fname}  ·  p.{page_idx + 1}",
                     "area":    w * h,
+                    "score":   _score,
                 })
 
             if embedded:
-                images.extend(embedded)
+                candidates.extend(embedded)
             else:
-                # ── Pass 2: render the whole page (always works for slide PDFs) ──
+                # ── Pass 2: render the whole page (works for slide PDFs where the
+                # diagram is vector-drawn, not an embedded raster image). This also
+                # fires on plain text pages (bullet lists, prose) with no diagram at
+                # all — those produce a screenshot-of-text that's useless as an
+                # "image," so they're tagged for the vision filter to reject.
                 try:
-                    mat = fitz.Matrix(1.5, 1.5)          # ~108 DPI — crisp but not huge
+                    mat = fitz.Matrix(1.5, 1.5)      # ~108 DPI — crisp but light
                     pix = page.get_pixmap(matrix=mat, alpha=False)
                     img_bytes = pix.tobytes("png")
-                    images.append({
-                        "bytes":   img_bytes,
-                        "ext":     "png",
-                        "caption": f"📄 {fname}  ·  p.{page_idx + 1}",
-                        "area":    pix.width * pix.height,
+                    candidates.append({
+                        "bytes":    img_bytes,
+                        "ext":      "png",
+                        "caption":  f"📄 {fname}  ·  p.{page_idx + 1}",
+                        "area":     pix.width * pix.height,
+                        "score":    _score,
+                        "is_full_page_render": True,
                     })
                 except Exception:
                     pass
 
-            if len(images) >= max_images * 2:
+            if len(candidates) >= max_images * 3:
                 break
 
         doc.close()
-        if len(images) >= max_images * 2:
+        if len(candidates) >= max_images * 3:
             break
 
-    images.sort(key=lambda x: x["area"], reverse=True)
-    return images[:max_images], debug_meta   # return debug info alongside images
+    # Rank by relevance of the source chunk first, page-area as tiebreaker
+    candidates.sort(key=lambda x: (x["score"], x["area"]), reverse=True)
+    candidates = candidates[:max(max_images * 2, 8)]
+
+    if question and candidates:
+        try:
+            kept, vision_meta = _select_relevant_images(candidates, question, answer_text, max_keep=max_images)
+        except Exception as _e:
+            kept = candidates[:max_images]
+            vision_meta = {"ran": False, "error": f"{type(_e).__name__}: {_e}"}
+    else:
+        kept = candidates[:max_images]
+        vision_meta = {"ran": False, "reason": "no question supplied"}
+
+    for c in kept:
+        c.pop("score", None)
+    return kept, debug_meta, dl_meta, vision_meta
+
+
+def retrieve_relevant_images_by_caption(question: str, top_k: int = 5) -> tuple:
+    """
+    Search the dedicated image-caption index (built by build_image_index.py)
+    directly with the student's question, independent of which text chunks
+    answered it in words. This is what lets a genuinely relevant diagram
+    surface even when it lives on a different page/document than the one
+    that happened to answer the question textually — extract_page_images()
+    structurally can't do that, since it only ever looks at pages cited by
+    the top-scoring TEXT chunks.
+
+    Returns (images, meta). Returns ([], meta) if IS_CLOUD is False, the
+    caption index hasn't been built yet, or nothing meets the score floor —
+    callers should fall back to extract_page_images() in that case.
+    """
+    if not IS_CLOUD:
+        return [], {"ran": False, "reason": "caption index is cloud-only"}
+    try:
+        import openai
+        from config import PINECONE_API_KEY, PINECONE_INDEX
+        oai = openai.OpenAI()
+        embedding = oai.embeddings.create(input=question, model="text-embedding-ada-002").data[0].embedding
+
+        pc  = PineconeClient(api_key=PINECONE_API_KEY)
+        idx = pc.Index(PINECONE_INDEX)
+        results = idx.query(
+            vector=embedding, top_k=top_k, include_metadata=True,
+            filter={"content_type": {"$eq": "image"}},
+        )
+
+        _sb_url = os.getenv("SUPABASE_URL", "")
+        _sb_key = SUPABASE_SERVICE_KEY or os.getenv("SUPABASE_KEY", "")
+        if not (_sb_url and _sb_key):
+            return [], {"ran": False, "reason": "no Supabase key for course-images fetch"}
+        from supabase import create_client as _sb_create
+        sb = _sb_create(_sb_url, _sb_key)
+
+        images = []
+        match_meta = []
+        # Score floor: cosine similarity below this means "nothing genuinely
+        # matches". NOTE: ada-002 scores are compressed — in-domain captions
+        # routinely score 0.70-0.85 even when irrelevant (a perio chart vs. a
+        # crown prep question), so this floor only cuts obvious junk. The real
+        # relevance decision is the Haiku caption check below.
+        SCORE_FLOOR = 0.78
+        survivors = []
+        for m in results.matches:
+            score = getattr(m, "score", 0.0) or 0.0
+            meta = m.metadata or {}
+            match_meta.append({"file": meta.get("file_name"), "page": meta.get("page_label"),
+                                "score": round(score, 4), "caption": meta.get("caption", "")[:120]})
+            if score < SCORE_FLOOR:
+                continue
+            if not meta.get("storage_key"):
+                continue
+            survivors.append(meta)
+
+        # ── Haiku caption-relevance check ─────────────────────────────
+        # Embedding similarity alone can't tell "same domain" from "answers
+        # THIS question". One cheap text-only call judges each surviving
+        # caption against the student's question before anything is shown.
+        # Fail-open: if the call errors, fall back to the score-ranked list
+        # rather than showing nothing.
+        haiku_meta = {"ran": False, "reason": "no survivors"}
+        if survivors:
+            try:
+                numbered = "\n".join(
+                    f"{i}. {meta.get('caption', '')[:300]}" for i, meta in enumerate(survivors)
+                )
+                resp = anthropic_client.messages.create(
+                    model="claude-haiku-4-5-20251001",
+                    max_tokens=200,
+                    tools=[{
+                        "name": "select_images",
+                        "description": "Select which image captions are directly relevant to the student's question.",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "keep": {
+                                    "type": "array",
+                                    "items": {"type": "integer"},
+                                    "description": (
+                                        "Indices of captions depicting something that directly helps "
+                                        "answer THIS question (the procedure, anatomy, or concept "
+                                        "asked about). Exclude images that are merely from the same "
+                                        "course or generally dental — e.g. a perio chart is NOT "
+                                        "relevant to a crown prep question. Empty list if none qualify."
+                                    ),
+                                },
+                            },
+                            "required": ["keep"],
+                        },
+                    }],
+                    tool_choice={"type": "tool", "name": "select_images"},
+                    messages=[{
+                        "role": "user",
+                        "content": (
+                            f"A dental student asked:\n\"{question[:600]}\"\n\n"
+                            f"Candidate image captions from course materials:\n{numbered}\n\n"
+                            "Which images would actually help answer this specific question?"
+                        ),
+                    }],
+                )
+                keep_idx = None
+                for block in resp.content:
+                    if block.type == "tool_use" and block.name == "select_images":
+                        keep_idx = [i for i in block.input.get("keep", []) if isinstance(i, int)]
+                haiku_meta = {"ran": True, "candidates": len(survivors), "kept": keep_idx}
+                if keep_idx is not None:
+                    survivors = [survivors[i] for i in keep_idx if 0 <= i < len(survivors)]
+            except Exception as _he:
+                haiku_meta = {"ran": False, "error": f"{type(_he).__name__}: {_he}"}
+
+        for meta in survivors:
+            storage_key = meta.get("storage_key")
+            try:
+                raw = sb.storage.from_("course-images").download(storage_key)
+            except Exception:
+                continue
+            if not raw:
+                continue
+            images.append({
+                "bytes": raw,
+                "ext": storage_key.rsplit(".", 1)[-1] if "." in storage_key else "png",
+                "caption": f"📄 {meta.get('file_name', '?')}  ·  p.{meta.get('page_label', '?')}",
+            })
+        return images[:top_k], {"ran": True, "matches": match_meta, "haiku_filter": haiku_meta}
+    except Exception as e:
+        return [], {"ran": False, "error": f"{type(e).__name__}: {e}"}
+
 
 # ─── Underwater Sunrays HTML ─────────────────────────────────────────────────────
 # (angle°, width px, sway duration s, sway delay s, op-lo, op-hi, pulse dur s, pulse delay s)
@@ -869,16 +1279,46 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif !important;
 }
 
-.stApp {
-    background: #eef1f8;
+/* Hide Streamlit's default white top toolbar so hero fills edge-to-edge */
+[data-testid="stHeader"],
+[data-testid="stDecoration"],
+[data-testid="stStatusWidget"],
+[data-testid="stToolbar"] {
+    display: none !important;
 }
 
-/* Content column sits on a clean light background */
-.block-container {
+.stApp,
+[data-testid="stAppViewContainer"],
+[data-testid="stApp"],
+.main {
+    background: radial-gradient(120% 90% at 50% -8%, #0b3e74 0%, #07315f 32%, #04204a 62%, #021730 100%) !important;
+    background-attachment: fixed !important;
+}
+
+/* Every Streamlit container must be transparent so the navy gradient shows through.
+   Also zero out all top padding/margin — stMainScrollableContainer reserves space
+   for the hidden header and must be explicitly cleared. */
+[data-testid="stMain"],
+[data-testid="stMainScrollableContainer"],
+[data-testid="stMainBlockContainer"],
+[data-testid="stAppViewBlockContainer"],
+.block-container,
+.main .block-container {
+    background: transparent !important;
     padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+.block-container {
     padding-bottom: 40px !important;
     max-width: 920px !important;
-    background: transparent;
+}
+
+/* Streamlit inner wrapper — must be transparent */
+[data-testid="stVerticalBlock"],
+[data-testid="stVerticalBlockBorderWrapper"],
+.element-container {
+    background: transparent !important;
 }
 
 /* ── Ensure all markdown text is clearly dark on the light bg ── */
@@ -1019,12 +1459,23 @@ header    { visibility: hidden; }
 .hero-wrapper {
     position: relative;
     overflow: hidden;
-    border-radius: 0 0 28px 28px;
+    border-radius: 0;
     background: linear-gradient(135deg, #00155a, #003087, #00205b, #001240);
     background-size: 400% 400%;
     animation: gradientShift 10s ease infinite;
-    padding: 44px 48px 56px;
-    margin: -28px -4rem 32px -4rem;
+    /* Full-bleed: extend background edge-to-edge across the viewport */
+    width: 100vw;
+    left: 50%;
+    transform: translateX(-50%);
+    /* Negative top margin closes the gap left by hidden stHeader */
+    margin: -4rem 0 32px 0;
+    /* Vertical padding — extra top padding compensates for the pull-up */
+    padding: 80px 0 60px;
+}
+
+/* Prevent the 100vw hero from causing a horizontal scrollbar */
+html, body, [data-testid="stApp"] {
+    overflow-x: hidden !important;
 }
 
 /* floating orbs */
@@ -1081,13 +1532,16 @@ header    { visibility: hidden; }
     pointer-events: none;
 }
 
-/* hero content */
+/* hero content — constrained to content-area width so text doesn't move */
 .hero-content {
     position: relative;
     z-index: 2;
     display: flex;
     align-items: center;
     gap: 28px;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 48px;
 }
 
 .hero-logo-wrap {
@@ -1157,9 +1611,9 @@ header    { visibility: hidden; }
 
 .hero-title {
     color: #ffffff !important;
-    font-size: 2.2rem;
+    font-size: 3rem;
     font-weight: 800;
-    margin: 0 0 6px 0;
+    margin: 0 0 8px 0;
     line-height: 1.1;
     letter-spacing: -0.5px;
     text-shadow: 0 2px 20px rgba(0,0,0,0.3);
@@ -1170,7 +1624,7 @@ header    { visibility: hidden; }
 
 .hero-sub {
     color: rgba(255,255,255,0.92) !important;
-    font-size: 0.95rem;
+    font-size: 1.1rem;
     font-weight: 500;
     margin: 0;
     letter-spacing: 0.2px;
@@ -1237,7 +1691,7 @@ header    { visibility: hidden; }
     padding: 28px 32px;
     margin-bottom: 20px;
     border: 1px solid rgba(0,48,135,0.10);
-    box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+    box-shadow: 0 8px 34px rgba(0,0,0,0.30);
     animation: slideUp 0.5s ease both;
 }
 .main-card:nth-child(2) { animation-delay: 0.1s; }
@@ -1371,12 +1825,42 @@ div[data-testid="column"] .stButton > button:not(.new-chat-btn) {
     animation: fadeIn 0.6s ease both;
 }
 
+/* ── White card for AI response text ──
+   Requiring a stVerticalBlock ANCESTOR prevents the top-level page block
+   from matching — only the nested st.container() block gets the white card. ── */
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) {
+    background: #ffffff !important;
+    border-radius: 16px !important;
+    border-left: 5px solid #003087 !important;
+    padding: 24px 28px !important;
+    box-shadow: 0 8px 34px rgba(0,0,0,0.28) !important;
+    margin-bottom: 18px !important;
+    animation: slideUp 0.45s ease both !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] p,
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] li {
+    color: #1e293b !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] h1,
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] h2,
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] h3 {
+    color: #003087 !important;
+    font-weight: 700 !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] strong {
+    color: #003087 !important;
+}
+[data-testid="stVerticalBlock"] [data-testid="stVerticalBlock"]:has(.ai-response-card) [data-testid="stMarkdownContainer"] code {
+    background: #eef2ff !important;
+    color: #003087 !important;
+}
+
 .response-card {
     background: #ffffff;
     border-radius: 16px;
     border-left: 5px solid #003087;
     padding: 28px 32px;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+    box-shadow: 0 8px 34px rgba(0,0,0,0.30);
     margin-bottom: 18px;
     animation: slideUp 0.45s ease both;
     border-top: 1px solid rgba(0,48,135,0.08);
@@ -1406,6 +1890,35 @@ div[data-testid="column"] .stButton > button:not(.new-chat-btn) {
     color: #003087;
     font-size: 1.05rem;
     font-weight: 700;
+    margin: 0;
+}
+
+/* ── AI response card header (badge + title row) ── */
+.ai-response-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #eef1f8;
+}
+.ai-response-badge {
+    background: linear-gradient(135deg, #003087, #004db3);
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 5px 12px;
+    border-radius: 20px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.ai-response-title {
+    color: #003087;
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.3;
     margin: 0;
 }
 
@@ -1561,8 +2074,8 @@ div[data-testid="column"] .stButton > button:not(.new-chat-btn) {
 ══════════════════════════════════════ */
 
 section[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #00155a 0%, #003087 60%, #00205b 100%) !important;
-    border-right: 1px solid rgba(253,185,19,0.15) !important;
+    background: linear-gradient(180deg, #072a52 0%, #04152e 100%) !important;
+    border-right: 1px solid rgba(253,185,19,0.18) !important;
 }
 
 /* all sidebar text white */
@@ -1653,48 +2166,44 @@ section[data-testid="stSidebar"] code {
 
 /* Fixed bottom bar that Streamlit creates for chat_input */
 [data-testid="stBottom"] > div {
-    background: #eef1f8 !important;
-    border-top: 1px solid rgba(0,48,135,0.09) !important;
+    background: rgba(3,18,40,0.82) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border-top: 1px solid rgba(150,200,255,0.12) !important;
     padding: 14px 0 10px !important;
 }
-
-/* The chat input box itself */
-[data-testid="stChatInput"] {
-    border-radius: 24px !important;
-    border: 2px solid rgba(0,48,135,0.18) !important;
+/* The chat input box — clean single rectangle, no pill/double-border */
+[data-testid="stChatInput"],
+[data-testid="stChatInput"] > div {
+    border-radius: 8px !important;
+    border: 1.5px solid rgba(150,200,255,0.35) !important;
     background: #ffffff !important;
-    box-shadow: 0 4px 20px rgba(0,48,135,0.10) !important;
-    transition: border-color 0.25s, box-shadow 0.25s !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transition: border-color 0.2s !important;
 }
-[data-testid="stChatInput"]:focus-within {
-    border-color: #003087 !important;
-    box-shadow: 0 4px 24px rgba(0,48,135,0.18) !important;
+[data-testid="stChatInput"]:focus-within,
+[data-testid="stChatInput"]:focus-within > div {
+    border-color: #3a8fd6 !important;
 }
 [data-testid="stChatInput"] textarea {
     font-family: 'Inter', sans-serif !important;
     font-size: 0.95rem !important;
     color: #1e293b !important;
     background: transparent !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
 }
 [data-testid="stChatInput"] textarea::placeholder {
     color: #94a3b8 !important;
 }
-/* Send button inside chat_input — vertically centered */
 [data-testid="stChatInput"] button {
     background: linear-gradient(135deg, #003087, #0041b3) !important;
     border-radius: 50% !important;
     color: #ffffff !important;
     border: none !important;
     align-self: center !important;
-    margin-top: auto !important;
-    margin-bottom: auto !important;
-    position: relative !important;
-    top: 0 !important;
-    transform: translateY(0) !important;
-}
-[data-testid="stChatInput"] > div {
-    align-items: center !important;
-    display: flex !important;
 }
 [data-testid="stChatInput"] button:hover {
     background: linear-gradient(135deg, #0041b3, #0050d8) !important;
@@ -2013,31 +2522,36 @@ section[data-testid="stSidebar"] .stButton > button:hover {
     box-shadow: none !important;
 }
 
-/* Primary buttons override → gold pill (New Chat, language toggle)
-   More specific selector wins: .stButton > button[attr] beats .stButton > button */
+/* Primary buttons → "+ New Conversation" outlined white frosted box */
 section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] {
-    background: rgba(253,185,19,0.15) !important;
-    color: #FDB913 !important;
-    border: 1px solid rgba(253,185,19,0.45) !important;
-    border-radius: 20px !important;
-    padding: 7px 20px !important;
-    font-size: 0.85rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.3px !important;
-    text-align: center !important;
+    background: rgba(255,255,255,0.2) !important;
+    color: #ffffff !important;
+    border: 2px solid rgba(255,255,255,0.75) !important;
+    border-radius: 14px !important;
+    padding: 15px 20px !important;
+    font-size: 1.2rem !important;
+    font-weight: 900 !important;
+    letter-spacing: 0.4px !important;
+    text-align: left !important;
     white-space: normal !important;
     overflow: visible !important;
+    width: 100% !important;
 }
 section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] p,
 section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"] span {
+    color: #ffffff !important;
+    font-weight: 900 !important;
+    font-size: 1.2rem !important;
+}
+section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"]::first-letter {
     color: #FDB913 !important;
-    font-weight: 700 !important;
-    font-size: 0.85rem !important;
+    font-size: 1.3rem !important;
+    font-weight: 900 !important;
 }
 section[data-testid="stSidebar"] .stButton > button[data-testid="baseButton-primary"]:hover {
-    background: rgba(253,185,19,0.28) !important;
-    border-color: rgba(253,185,19,0.7) !important;
-    color: #FDB913 !important;
+    background: rgba(255,255,255,0.3) !important;
+    border-color: rgba(255,255,255,1) !important;
+    color: #ffffff !important;
     transform: none !important;
     box-shadow: none !important;
 }
@@ -2147,7 +2661,60 @@ section[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {
     border-radius: 0 0 50% 50%;
     animation: rayPulse ease-in-out infinite;
 }
+
+/* ══════════════════════════════════════
+   UNDERWATER BACKGROUND RAYS
+══════════════════════════════════════ */
+
+@keyframes raySway {
+    0%, 100% { opacity: var(--op-lo, 0.04); transform: rotate(var(--r, 0deg)) scaleX(1); }
+    50%       { opacity: var(--op-hi, 0.10); transform: rotate(var(--r, 0deg)) scaleX(1.05); }
+}
+
+@keyframes causticPulse {
+    0%, 100% { opacity: 0.03; transform: scale(1); }
+    50%       { opacity: 0.07; transform: scale(1.08); }
+}
+
+.bg-rays-container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 0;
+}
+
+.bg-ray {
+    position: absolute;
+    top: 50%; left: 50%;
+    height: 200%;
+    border-radius: 50%;
+    background: linear-gradient(90deg, transparent 0%, rgba(150,200,255,0.07) 50%, transparent 100%);
+    transform-origin: left center;
+    animation: raySway ease-in-out infinite;
+}
+
+.bg-caustic {
+    position: absolute;
+    inset: -20%;
+    background: radial-gradient(ellipse at 35% 40%, rgba(0,144,204,0.08) 0%, transparent 55%),
+                radial-gradient(ellipse at 70% 65%, rgba(0,48,135,0.06) 0%, transparent 50%);
+    animation: causticPulse 19s ease-in-out infinite;
+}
+
 </style>
+""", unsafe_allow_html=True)
+
+# ─── Underwater background ray injection ─────────────────────────────────────
+st.markdown("""
+<div class="bg-rays-container">
+  <div class="bg-ray" style="width:280px; --r:-28deg; --op-lo:0.04; --op-hi:0.10; animation-duration:8s;"></div>
+  <div class="bg-ray" style="width:200px; --r:18deg;  --op-lo:0.03; --op-hi:0.08; animation-duration:11s; animation-delay:1.5s;"></div>
+  <div class="bg-ray" style="width:340px; --r:-52deg; --op-lo:0.05; --op-hi:0.12; animation-duration:7s; animation-delay:3s;"></div>
+  <div class="bg-ray" style="width:160px; --r:42deg;  --op-lo:0.02; --op-hi:0.07; animation-duration:13s; animation-delay:0.8s;"></div>
+  <div class="bg-ray" style="width:240px; --r:-10deg; --op-lo:0.03; --op-hi:0.09; animation-duration:9s; animation-delay:5s;"></div>
+  <div class="bg-caustic"></div>
+</div>
 """, unsafe_allow_html=True)
 
 
@@ -2157,9 +2724,10 @@ section[data-testid="stSidebar"] [data-testid="stSelectbox"] > div > div {
 
 class _PineconeNode:
     """Minimal stand-in for a llama-index NodeWithScore."""
-    def __init__(self, text: str, metadata: dict):
+    def __init__(self, text: str, metadata: dict, score: float = 0.0):
         self.text     = text
         self.metadata = metadata
+        self.score    = score
 
 class _PineconeRetriever:
     def __init__(self, pinecone_index, top_k: int = 20):
@@ -2182,6 +2750,7 @@ class _PineconeRetriever:
             _PineconeNode(
                 text     = m.metadata.get("text", ""),
                 metadata = m.metadata,
+                score    = getattr(m, "score", 0.0) or 0.0,
             )
             for m in results.matches
         ]
@@ -3213,6 +3782,12 @@ def run_agent(
                 answer      = block.input.get("answer", "")
                 needs_images = block.input.get("needs_images", True)
                 sources     = block.input.get("sources", all_sources)
+                # Claude sometimes returns sources as a string instead of a list —
+                # normalize to list before concatenating to avoid TypeError.
+                if isinstance(sources, str):
+                    sources = [sources] if sources else []
+                elif not isinstance(sources, list):
+                    sources = []
                 all_sources = list(dict.fromkeys(sources + all_sources))
                 final_nodes = retrieved_nodes if needs_images else []
                 terminal    = True
@@ -3265,7 +3840,7 @@ st.markdown(
     "</div>"
     "<div class='hero-wave'>"
     "<svg viewBox='0 0 1440 54' xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none' style='display:block;width:100%;'>"
-    "<path d='M0,20 C240,50 480,0 720,24 C960,48 1200,4 1440,24 L1440,54 L0,54 Z' fill='#eef1f8'/>"
+    "<path d='M0,20 C240,50 480,0 720,24 C960,48 1200,4 1440,24 L1440,54 L0,54 Z' fill='#0b3e74'/>"
     "</svg>"
     "</div>"
     "</div>",
@@ -3302,10 +3877,21 @@ components.html("""
         btn.onmouseenter = function() { btn.style.background = '#0041b3'; };
         btn.onmouseleave = function() { btn.style.background = '#003087'; };
         btn.onclick = function() {
+            // Try all known Streamlit sidebar toggle selectors (varies by version)
             var native =
                 doc.querySelector('[data-testid="stSidebarCollapseButton"] button') ||
-                doc.querySelector('[data-testid="collapsedControl"] button');
-            if (native) native.click();
+                doc.querySelector('[data-testid="stSidebarCollapsedControl"] button') ||
+                doc.querySelector('[data-testid="collapsedControl"] button') ||
+                doc.querySelector('button[kind="header"][data-testid]') ||
+                doc.querySelector('[data-testid="stSidebar"] button[kind="header"]');
+            if (native) { native.click(); return; }
+            // Fallback: toggle sidebar via Streamlit's built-in collapse mechanism
+            var sidebar = doc.querySelector('[data-testid="stSidebar"]');
+            if (sidebar) {
+                var isCollapsed = sidebar.getAttribute('aria-expanded') === 'false' ||
+                                  sidebar.style.width === '0px';
+                sidebar.style.display = isCollapsed ? '' : 'none';
+            }
         };
         doc.body.appendChild(btn);
     }
@@ -3350,26 +3936,47 @@ def render_response(assistant_text, sources, images, model="", annotated_image=N
         st.image(annotated_image, use_container_width=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
-    if images:
-        col_text, col_imgs = st.columns([3, 1.4], gap="medium")
-        with col_text:
-            st.markdown(assistant_text)
-        with col_imgs:
-            st.markdown(
-                f"<div class='img-panel-header'>{t['img_panel']}</div>"
-                "<div class='img-panel-body'>",
-                unsafe_allow_html=True
-            )
-            for img in images:
-                st.markdown("<div class='img-card'>", unsafe_allow_html=True)
-                st.image(img["bytes"], use_container_width=True)
+    # ── Extract H1 title from markdown for badge+title header ──────────────────
+    _lines = assistant_text.strip().split('\n')
+    _resp_title = ""
+    _resp_body = assistant_text
+    for _li, _ln in enumerate(_lines):
+        _s = _ln.strip()
+        if _s.startswith('## ') or _s.startswith('# '):
+            _resp_title = _s.lstrip('#').strip()
+            _resp_body = '\n'.join(_lines[_li + 1:]).strip()
+            break
+
+    with st.container():
+        # Anchor div — CSS :has(.ai-response-card) targets this container for white bg
+        st.markdown("<div class='ai-response-card'></div>", unsafe_allow_html=True)
+        # Clinical guidance badge + title header
+        _hdr = "<div class='ai-response-header'><span class='ai-response-badge'>🦷 CLINICAL GUIDANCE</span>"
+        if _resp_title:
+            _hdr += f"<span class='ai-response-title'>{_resp_title}</span>"
+        _hdr += "</div>"
+        st.markdown(_hdr, unsafe_allow_html=True)
+        _display_text = _resp_body if _resp_title else assistant_text
+        if images:
+            col_text, col_imgs = st.columns([3, 1.4], gap="medium")
+            with col_text:
+                st.markdown(_display_text)
+            with col_imgs:
                 st.markdown(
-                    f"<div class='img-caption'>{img['caption']}</div></div>",
+                    f"<div class='img-panel-header'>{t['img_panel']}</div>"
+                    "<div class='img-panel-body'>",
                     unsafe_allow_html=True
                 )
-            st.markdown("</div>", unsafe_allow_html=True)
-    else:
-        st.markdown(assistant_text)
+                for img in images:
+                    st.markdown("<div class='img-card'>", unsafe_allow_html=True)
+                    st.image(img["bytes"], use_container_width=True)
+                    st.markdown(
+                        f"<div class='img-caption'>{img['caption']}</div></div>",
+                        unsafe_allow_html=True
+                    )
+                st.markdown("</div>", unsafe_allow_html=True)
+        else:
+            st.markdown(_display_text)
 
     if sources:
         unique_sources = sorted(set(sources))
@@ -3386,7 +3993,34 @@ def render_response(assistant_text, sources, images, model="", annotated_image=N
         )
 
 
-# ─── Chat History (flows naturally, page scrolls) ────────────────────────────────
+# ─── Scroll-to-top after session load ─────────────────────────────────────────
+if st.session_state.pop("scroll_to_top", False):
+    import streamlit.components.v1 as _cv1
+    _cv1.html("""
+    <script>
+    (function() {
+        var par = window.parent;
+        var pdoc = par.document;
+        // Fight Streamlit's auto-scroll using rAF loop for 1.5s.
+        // Streamlit's React useEffect scrolls once; we immediately override it
+        // every animation frame until the dust settles.
+        var deadline = par.performance.now() + 1500;
+        function resetScroll() {
+            par.scrollTo(0, 0);
+            pdoc.documentElement.scrollTop = 0;
+            pdoc.body.scrollTop = 0;
+            var main = pdoc.querySelector('[data-testid="stMain"]');
+            if (main) main.scrollTop = 0;
+            if (par.performance.now() < deadline) {
+                par.requestAnimationFrame(resetScroll);
+            }
+        }
+        par.requestAnimationFrame(resetScroll);
+    })();
+    </script>
+    """, height=0)
+
+# ─── Chat History (flows naturally, page scrolls) ──────────────────────────────
 _has_history = bool(st.session_state.chat_history)
 
 if _has_history:
@@ -3402,9 +4036,7 @@ if _has_history:
                 _ts_display = _ts[:16].replace("T", " ")
         st.markdown(
             "<div class='chat-user-bubble'>"
-            f"<span class='chat-user-label'>{_t['you_asked']}"
-            + (f"<span style='font-weight:400;opacity:0.6;margin-left:8px;font-size:0.65rem;'>{_ts_display}</span>" if _ts_display else "")
-            + "</span>"
+            f"<span class='chat-user-label'>{_t['you_asked']}</span>"
             f"<p class='chat-user-text'>{exchange['user']}</p>"
             "</div>",
             unsafe_allow_html=True
@@ -3419,6 +4051,10 @@ if _has_history:
         ann_img  = st.session_state.get("latest_annotated_image") if i == len(st.session_state.chat_history) - 1 else None
         render_response(exchange["assistant"], exchange["sources"], imgs, exchange.get("model", ""), annotated_image=ann_img)
 
+# ── Temporary image debug panel (remove after diagnosing) ──
+if st.session_state.get("_img_debug"):
+    with st.expander("🔍 Image debug (admin)", expanded=False):
+        st.json(st.session_state["_img_debug"])
 
 # ─── Pending Clarification Display ───────────────────────────────────────────────
 # When the agent needs more info, show its question as an assistant bubble
@@ -3490,10 +4126,9 @@ if _uploaded_image:
     with _prev_col:
         st.image(_uploaded_image, caption="📎 Attached", use_container_width=True)
 
-# ─── Fixed-bottom chat input (native Streamlit) ───────────────────────────────────
+# ─── Chat input ───────────────────────────────────────────────────────────────────
 _placeholder = _t["placeholder_followup"] if (_has_history or "pending_original_question" in st.session_state) else _t["placeholder_new"]
 case_input = st.chat_input(_placeholder)
-
 
 # ─── Process Submission ───────────────────────────────────────────────────────────
 if case_input:
@@ -3570,11 +4205,41 @@ if case_input:
     st.session_state.latest_annotated_image = annotated_img
 
     # ── Extract curriculum images only when the agent flagged them as useful ──
-    if relevant_nodes:
-        page_images, _ = extract_page_images(relevant_nodes, max_images=5)
+    # Primary source: the dedicated image-caption index, searched directly by
+    # the question — finds a relevant diagram regardless of which page/doc
+    # answered the question in words. Falls back to the older page-provenance
+    # approach (extract_page_images) when the caption index has no match yet,
+    # e.g. for files build_image_index.py hasn't processed yet.
+    _caption_images, _caption_meta = ([], {"ran": False, "reason": "no relevant_nodes"})
+    if relevant_nodes and case_input:
+        _caption_images, _caption_meta = retrieve_relevant_images_by_caption(case_input, top_k=5)
+
+    if _caption_images:
+        page_images = _caption_images
+        _dbg, _dl, _vision = [], [], {"ran": False, "reason": "caption index served this one"}
+    elif relevant_nodes:
+        page_images, _dbg, _dl, _vision = extract_page_images(
+            relevant_nodes, max_images=5, question=case_input, answer_text=assistant_text,
+        )
     else:
         page_images = []
+        _dbg = []
+        _dl = []
+        _vision = {"ran": False, "reason": "no relevant_nodes"}
     st.session_state.latest_images = page_images
+    # Temporary debug — remove after diagnosing image pipeline
+    st.session_state["_img_debug"] = {
+        "pymupdf_ok": PYMUPDF_OK,
+        "is_cloud": IS_CLOUD,
+        "supabase_service_key_set": bool(SUPABASE_SERVICE_KEY),
+        "nodes_passed": len(relevant_nodes),
+        "node_files": [n.metadata.get("file_name", "?") for n in relevant_nodes[:5]],
+        "images_found": len(page_images),
+        "caption_index": _caption_meta,   # dedicated image-caption index results (primary source)
+        "download_attempts": _dl,         # per-file page-provenance fallback (only runs if caption index empty)
+        "vision_filter": _vision,         # what Claude kept/rejected (fallback path only)
+        "debug_meta": _dbg[:5],
+    }
 
     # ── Save exchange to history + persist ──
     st.session_state.chat_history.append({
@@ -3850,6 +4515,7 @@ with st.sidebar:
                             st.session_state.chat_history       = load_session(sess["id"])
                             st.session_state.latest_images      = []
                             st.query_params["load_sess"]        = sess["id"]
+                            st.session_state.scroll_to_top      = True
                             st.rerun()
 
                 with col_menu:
