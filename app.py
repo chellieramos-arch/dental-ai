@@ -726,22 +726,47 @@ def _select_relevant_images(candidates, question, answer_text, max_keep=5):
     if not sent_idx:
         return candidates[:max_keep], {"ran": False, "reason": "no thumbnails could be built"}
 
+    # Haiku's visual judgment is the weak link here (it kept an odontogram for a
+    # crown prep question) — default this call to the COMPLEX model. Override
+    # with CLAUDE_MODEL_IMAGE_FILTER in .env if cost ever becomes an issue.
+    from config import CLAUDE_MODEL_COMPLEX as _MODEL_COMPLEX
+    _filter_model = os.getenv("CLAUDE_MODEL_IMAGE_FILTER", "").strip() or _MODEL_COMPLEX
+
     resp = anthropic_client.messages.create(
-        model=CLAUDE_MODEL_SIMPLE,
-        max_tokens=300,
+        model=_filter_model,
+        max_tokens=600,
         tools=[{
             "name": "select_relevant_images",
-            "description": "Choose which candidate images are actually relevant and worth showing the student.",
+            "description": "Describe each candidate image, then choose which are actually relevant and worth showing the student.",
             "input_schema": {
                 "type": "object",
                 "properties": {
-                    "keep": {
+                    "images": {
                         "type": "array",
-                        "items": {"type": "integer"},
-                        "description": f"Indices (0-{len(candidates) - 1}) of images worth showing, best first. Empty array if none are relevant.",
-                    }
+                        "description": "One entry per candidate image, in order.",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "index": {"type": "integer"},
+                                "depicts": {
+                                    "type": "string",
+                                    "description": (
+                                        "What this image ACTUALLY shows, in one sentence — name the "
+                                        "image type first (clinical photo / radiograph / anatomical "
+                                        "diagram / step-by-step figure / odontogram-or-charting grid / "
+                                        "text screenshot / cover art)."
+                                    ),
+                                },
+                                "keep": {
+                                    "type": "boolean",
+                                    "description": "True ONLY if what it depicts directly teaches the subject of the question.",
+                                },
+                            },
+                            "required": ["index", "depicts", "keep"],
+                        },
+                    },
                 },
-                "required": ["keep"],
+                "required": ["images"],
             },
         }],
         tool_choice={"type": "tool", "name": "select_relevant_images"},
@@ -749,9 +774,13 @@ def _select_relevant_images(candidates, question, answer_text, max_keep=5):
     )
 
     keep_idx = []
+    judgments = []
     for block in resp.content:
         if block.type == "tool_use" and block.name == "select_relevant_images":
-            keep_idx = block.input.get("keep", [])
+            for entry in block.input.get("images", []):
+                judgments.append(entry)
+                if entry.get("keep") and isinstance(entry.get("index"), int):
+                    keep_idx.append(entry["index"])
             break
 
     kept = []
@@ -759,7 +788,8 @@ def _select_relevant_images(candidates, question, answer_text, max_keep=5):
         if isinstance(i, int) and 0 <= i < len(candidates) and len(kept) < max_keep:
             kept.append(candidates[i])
 
-    meta = {"ran": True, "candidates_sent": len(sent_idx), "kept": len(kept), "keep_idx": keep_idx}
+    meta = {"ran": True, "model": _filter_model, "candidates_sent": len(sent_idx),
+            "kept": len(kept), "keep_idx": keep_idx, "judgments": judgments}
     return kept, meta
 
 
